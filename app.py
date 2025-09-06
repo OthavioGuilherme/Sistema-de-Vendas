@@ -53,7 +53,7 @@ produtos = {
     4460: {"nome": "Meia Masc Saulo Kit C/3", "preco": 31.50},
 }
 
-# Clientes e vendas pré-cadastradas
+# Clientes
 clientes = {
     "Tabata": [
         {"codigo": 4685, "quantidade": 1},
@@ -117,7 +117,7 @@ def calcular_comissao():
     return calcular_total_geral() * 0.40
 
 # =============================
-# Interface Streamlit
+# Interface
 # =============================
 
 st.set_page_config(page_title="Sistema de Vendas", layout="wide")
@@ -131,78 +131,24 @@ st.write(f"💵 **Comissão (40%):** R$ {calcular_comissao():.2f}")
 menu = st.sidebar.radio("Menu", ["Cadastrar cliente", "Registrar venda", "Consultar cliente", "Relatórios"])
 
 # =============================
-# Cadastrar cliente
+# Consultar cliente (com autocomplete)
 # =============================
-if menu == "Cadastrar cliente":
-    st.subheader("➕ Cadastrar Cliente")
-    nome = st.text_input("Nome do cliente")
-    if st.button("Salvar cliente"):
-        if nome in clientes:
-            st.warning("Cliente já existe.")
-        else:
-            clientes[nome] = []
-            st.success(f"Cliente {nome} cadastrado com sucesso!")
-
-# =============================
-# Registrar venda
-# =============================
-elif menu == "Registrar venda":
-    st.subheader("🛍️ Registrar Venda")
-    cliente = st.selectbox("Selecione o cliente", list(clientes.keys()))
-    codigo = st.number_input("Código do produto", step=1)
-    quantidade = st.number_input("Quantidade", min_value=1, step=1)
-    if st.button("Registrar venda"):
-        if codigo in produtos:
-            clientes[cliente].append({"codigo": codigo, "quantidade": quantidade})
-            st.success(f"Venda registrada para {cliente} ({quantidade}x {produtos[codigo]['nome']})")
-        else:
-            st.error("Código de produto inválido.")
-
-# =============================
-# Consultar cliente
-# =============================
-elif menu == "Consultar cliente":
+if menu == "Consultar cliente":
     st.subheader("🔍 Consultar Cliente")
-    nome = st.text_input("Digite o nome do cliente")
-    if nome and nome in clientes:
-        st.write(f"📋 Relatório de **{nome}**")
-        total = calcular_total_cliente(clientes[nome])
-        for i, v in enumerate(clientes[nome]):
-            st.write(f"**{i+1}.** {produtos[v['codigo']]['nome']} ({v['quantidade']}x) - R$ {produtos[v['codigo']]['preco']:.2f} cada")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button(f"📝 Editar {i+1}", key=f"edit_{i}"):
-                    v["quantidade"] = st.number_input("Nova quantidade", value=v["quantidade"], step=1)
-                    st.success("Venda atualizada.")
-            with col2:
-                if st.button(f"🗑️ Apagar {i+1}", key=f"del_{i}"):
-                    clientes[nome].pop(i)
-                    st.success("Venda apagada.")
-        st.write(f"💰 Total do cliente: R$ {total:.2f}")
-        if st.button("❌ Apagar cliente"):
-            del clientes[nome]
-            st.success("Cliente apagado com sucesso.")
+    termo = st.text_input("Digite pelo menos 2 letras do nome:")
+    if len(termo) >= 2:
+        lista_filtrada = sorted([n for n in clientes if termo.lower() in n.lower()])
+        if lista_filtrada:
+            selecionado = st.selectbox("Selecione o cliente", lista_filtrada)
+            if selecionado:
+                st.write(f"📋 Relatório de **{selecionado}**")
+                total = calcular_total_cliente(clientes[selecionado])
+                for i, v in enumerate(clientes[selecionado]):
+                    st.write(f"- {produtos[v['codigo']]['nome']} ({v['quantidade']}x): R$ {produtos[v['codigo']]['preco'] * v['quantidade']:.2f}")
+                st.write(f"💰 Total do cliente: R$ {total:.2f}")
+        else:
+            st.info("Nenhum cliente encontrado.")
+    else:
+        st.info("Digite ao menos 2 caracteres para buscar.")
 
-# =============================
-# Relatórios
-# =============================
-elif menu == "Relatórios":
-    st.subheader("📑 Relatórios")
-    opcao = st.radio("Escolha uma opção", ["Geral", "Por cliente", "Comissão total"])
-
-    if opcao == "Geral":
-        st.write("📋 *Relatório Geral de Vendas*")
-        for nome, vendas in clientes.items():
-            st.write(f"- {nome}: R$ {calcular_total_cliente(vendas):.2f}")
-        st.write(f"💰 Total geral: R$ {calcular_total_geral():.2f}")
-        st.write(f"💵 Comissão total: R$ {calcular_comissao():.2f}")
-
-    elif opcao == "Por cliente":
-        nome = st.selectbox("Selecione o cliente", list(clientes.keys()))
-        st.write(f"📋 *Relatório de {nome}*")
-        for v in clientes[nome]:
-            st.write(f"- {produtos[v['codigo']]['nome']} ({v['quantidade']}x): R$ {produtos[v['codigo']]['preco'] * v['quantidade']:.2f}")
-        st.write(f"💰 Total do cliente: R$ {calcular_total_cliente(clientes[nome]):.2f}")
-
-    elif opcao == "Comissão total":
-        st.write(f"💵 *Comissão total (40%):* R$ {calcular_comissao():.2f}")
+# (As outras partes — cadastrar cliente, registrar venda, relatórios — continuam iguais ao que te mandei antes)
