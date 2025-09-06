@@ -5,7 +5,6 @@ import os
 # ==========================
 # Funções utilitárias
 # ==========================
-
 CLIENTES_FILE = "clientes.json"
 VENDAS_FILE = "vendas.json"
 
@@ -72,25 +71,71 @@ produtos = {
 }
 
 # ==========================
-# Carregar dados salvos
+# Clientes e vendas iniciais
 # ==========================
-clientes = carregar_dados(CLIENTES_FILE, [])
-vendas = carregar_dados(VENDAS_FILE, [])
+clientes_iniciais = [
+    {"nome": "Tabata"},
+    {"nome": "Valquiria"},
+    {"nome": "Vanessa"},
+    {"nome": "Pamela"},
+    {"nome": "Elan"},
+    {"nome": "Claudinha"},
+]
 
-# ==========================
-# Funções de negócio
-# ==========================
+vendas_iniciais = [
+    # Tabata
+    {"cliente": "Tabata", "codigo": 4685, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 4184, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 4351, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 3625, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 4597, "quantidade": 2},
+    {"cliente": "Tabata", "codigo": 3900, "quantidade": 3},
+    {"cliente": "Tabata", "codigo": 4680, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 4726, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 4539, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 4640, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 3875, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 4142, "quantidade": 1},
+    {"cliente": "Tabata", "codigo": 4705, "quantidade": 1},
+    # Valquiria (corrigir depois se faltar)
+    {"cliente": "Valquiria", "codigo": 4702, "quantidade": 1},
+    {"cliente": "Valquiria", "codigo": 4457, "quantidade": 1},
+    {"cliente": "Valquiria", "codigo": 4493, "quantidade": 1},
+    {"cliente": "Valquiria", "codigo": 4310, "quantidade": 1},
+    {"cliente": "Valquiria", "codigo": 4705, "quantidade": 2},
+    {"cliente": "Valquiria", "codigo": 3698, "quantidade": 3},
+    {"cliente": "Valquiria", "codigo": 4494, "quantidade": 1},
+    {"cliente": "Valquiria", "codigo": 4701, "quantidade": 1},
+    # Vanessa
+    {"cliente": "Vanessa", "codigo": 4562, "quantidade": 1},
+    {"cliente": "Vanessa", "codigo": 4699, "quantidade": 3},
+    {"cliente": "Vanessa", "codigo": 4539, "quantidade": 1},
+    # Pamela
+    {"cliente": "Pamela", "codigo": 4681, "quantidade": 1},
+    {"cliente": "Pamela", "codigo": 4459, "quantidade": 1},
+    {"cliente": "Pamela", "codigo": 4497, "quantidade": 1},
+    {"cliente": "Pamela", "codigo": 4673, "quantidade": 1},
+    # Elan
+    {"cliente": "Elan", "codigo": 4470, "quantidade": 2},
+    # Claudinha
+    {"cliente": "Claudinha", "codigo": 2750, "quantidade": 1},
+    {"cliente": "Claudinha", "codigo": 4239, "quantidade": 2},
+    {"cliente": "Claudinha", "codigo": 4142, "quantidade": 2},
+    {"cliente": "Claudinha", "codigo": 4343, "quantidade": 1},
+    {"cliente": "Claudinha", "codigo": 4122, "quantidade": 1},
+]
 
+# Carregar ou criar dados
+clientes = carregar_dados(CLIENTES_FILE, clientes_iniciais)
+vendas = carregar_dados(VENDAS_FILE, vendas_iniciais)
+
+# Funções
 def cadastrar_cliente(nome):
     clientes.append({"nome": nome})
     salvar_dados(CLIENTES_FILE, clientes)
 
 def registrar_venda(cliente_nome, codigo_produto, quantidade):
-    vendas.append({
-        "cliente": cliente_nome,
-        "codigo": codigo_produto,
-        "quantidade": quantidade
-    })
+    vendas.append({"cliente": cliente_nome, "codigo": codigo_produto, "quantidade": quantidade})
     salvar_dados(VENDAS_FILE, vendas)
 
 def calcular_totais():
@@ -104,10 +149,7 @@ def calcular_totais():
         totais[cli] = totais.get(cli, 0) + valor
     return totais
 
-# ==========================
-# Interface Streamlit
-# ==========================
-
+# Interface
 st.title("📦 Sistema de Vendas")
 
 menu = st.sidebar.radio("Menu", ["📊 Visão Geral", "👤 Clientes", "🛒 Vendas"])
