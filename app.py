@@ -2,7 +2,7 @@
 import streamlit as st
 
 # ========================
-# Banco inicial (os dados que você passou)
+# Banco inicial
 # ========================
 clientes_iniciais = {
     "Tabata": [
@@ -53,14 +53,13 @@ clientes_iniciais = {
     ],
 }
 
-# ========================
-# Inicialização de estado
-# ========================
+# Inicialização do estado
 if "clientes" not in st.session_state:
     st.session_state.clientes = clientes_iniciais.copy()
 
 COMISSAO = 0.40
 
+# Funções auxiliares
 def calcular_total_cliente(cliente):
     return sum(float(v["valor"]) * int(v["quantidade"]) for v in st.session_state.clientes.get(cliente, []))
 
@@ -86,14 +85,14 @@ def gerar_relatorio(tipo, cliente=None):
         return f"💰 Comissão total (40%): R$ {calcular_total_geral()*COMISSAO:.2f}"
 
 # ========================
-# Layout
+# Layout principal
 # ========================
 st.title("🛍️ Sistema de Vendas")
 
 menu = st.sidebar.radio("Menu", [
     "Cadastrar cliente",
     "Registrar venda",
-    "Consultar cliente",
+    "Consultar clientes",
     "Relatórios"
 ])
 
@@ -123,26 +122,26 @@ elif menu == "Registrar venda":
         })
         st.success("Venda registrada!")
 
-elif menu == "Consultar cliente":
-    st.header("Consultar / Editar / Apagar")
-    cliente = st.selectbox("Selecione o cliente:", list(st.session_state.clientes.keys()))
-    for i, v in enumerate(st.session_state.clientes[cliente]):
-        st.write(f"**{i+1}.** {v['nome']} ({v['quantidade']}x) - R$ {float(v['valor']):.2f}")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(f"✏️ Editar {i}", key=f"edit_{cliente}_{i}"):
-                with st.form(f"form_edit_{cliente}_{i}"):
-                    novo_nome = st.text_input("Novo nome:", v['nome'])
-                    nova_qtd = st.number_input("Quantidade:", min_value=1, value=int(v['quantidade']))
-                    novo_valor = st.number_input("Valor:", min_value=0.0, step=0.01, value=float(v['valor']))
-                    if st.form_submit_button("Salvar"):
-                        v['nome'] = novo_nome
-                        v['quantidade'] = int(nova_qtd)
-                        v['valor'] = float(novo_valor)
-                        st.experimental_rerun()
-        with col2:
-            if st.button(f"🗑️ Apagar {i}", key=f"del_{cliente}_{i}"):
-                st.session_state.clientes[cliente].pop(i)
+elif menu == "Consultar clientes":
+    st.header("Clientes")
+    for cliente in list(st.session_state.clientes.keys()):
+        with st.expander(f"{cliente} ⋮"):
+            st.write("**Vendas:**")
+            total = 0
+            for v in st.session_state.clientes[cliente]:
+                subtotal = float(v['valor']) * int(v['quantidade'])
+                st.write(f"- {v['nome']} ({v['quantidade']}x) → R$ {subtotal:.2f}")
+                total += subtotal
+            st.write(f"**Total do cliente:** R$ {total:.2f}")
+            st.markdown("---")
+            novo_nome = st.text_input(f"Novo nome para {cliente}:", cliente, key=f"rename_{cliente}")
+            cols = st.columns(2)
+            if cols[0].button(f"Salvar nome de {cliente}", key=f"save_{cliente}"):
+                if novo_nome.strip() and novo_nome != cliente:
+                    st.session_state.clientes[novo_nome] = st.session_state.clientes.pop(cliente)
+                    st.experimental_rerun()
+            if cols[1].button(f"🗑️ Apagar {cliente}", key=f"del_{cliente}"):
+                st.session_state.clientes.pop(cliente)
                 st.experimental_rerun()
 
 elif menu == "Relatórios":
