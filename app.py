@@ -19,7 +19,7 @@ produtos = {
     4402: {"nome": "Cueca Fem Suede", "preco": 19.30},
     4310: {"nome": "Tangao Nani Suede", "preco": 17.30},
     2750: {"nome": "Calça Cós Laser", "preco": 24.90},
-    4705: {"nome": "Tanga Ilma", "preco": 27.70}, # atualizado pelo que você mandou
+    4705: {"nome": "Tanga Ilma", "preco": 27.70},
     4699: {"nome": "Tanga Bolívia", "preco": 18.90},
     4539: {"nome": "Tanga Kamili", "preco": 19.35},
     4726: {"nome": "Tanga Mapola", "preco": 22.70},
@@ -110,6 +110,8 @@ def gerar_relatorio_geral():
         linhas.append(f"- {nome}: R$ {total:.2f}")
         total_geral += total
     linhas.append(f"\n💰 Total geral: R$ {total_geral:.2f}")
+    comissao = total_geral * 0.40
+    linhas.append(f"💰 Sua comissão (40%): R$ {comissao:.2f}")
     return "\n".join(linhas)
 
 def calcular_comissao_total():
