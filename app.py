@@ -2,9 +2,6 @@ import streamlit as st
 import json
 import os
 
-# ==========================
-# Funções utilitárias
-# ==========================
 CLIENTES_FILE = "clientes.json"
 VENDAS_FILE = "vendas.json"
 
@@ -19,9 +16,9 @@ def salvar_dados(arquivo, dados):
     with open(arquivo, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=4)
 
-# ==========================
-# Produtos cadastrados
-# ==========================
+# ----------------------------
+# Produtos
+# ----------------------------
 produtos = {
     3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
     4416: {"nome": "Calcinha Inf Canelada", "preco": 13.00},
@@ -70,66 +67,13 @@ produtos = {
     4460: {"nome": "Meia Masc Saulo Kit C/3", "preco": 31.50},
 }
 
-# ==========================
-# Clientes e vendas iniciais
-# ==========================
-clientes_iniciais = [
-    {"nome": "Tabata"},
-    {"nome": "Valquiria"},
-    {"nome": "Vanessa"},
-    {"nome": "Pamela"},
-    {"nome": "Elan"},
-    {"nome": "Claudinha"},
-]
+clientes_iniciais = [{"nome": "Tabata"}, {"nome": "Valquiria"}, {"nome": "Vanessa"}, {"nome": "Pamela"}, {"nome": "Elan"}, {"nome": "Claudinha"}]
 
-vendas_iniciais = [
-    # Tabata
-    {"cliente": "Tabata", "codigo": 4685, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 4184, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 4351, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 3625, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 4597, "quantidade": 2},
-    {"cliente": "Tabata", "codigo": 3900, "quantidade": 3},
-    {"cliente": "Tabata", "codigo": 4680, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 4726, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 4539, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 4640, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 3875, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 4142, "quantidade": 1},
-    {"cliente": "Tabata", "codigo": 4705, "quantidade": 1},
-    # Valquiria (corrigir depois se faltar)
-    {"cliente": "Valquiria", "codigo": 4702, "quantidade": 1},
-    {"cliente": "Valquiria", "codigo": 4457, "quantidade": 1},
-    {"cliente": "Valquiria", "codigo": 4493, "quantidade": 1},
-    {"cliente": "Valquiria", "codigo": 4310, "quantidade": 1},
-    {"cliente": "Valquiria", "codigo": 4705, "quantidade": 2},
-    {"cliente": "Valquiria", "codigo": 3698, "quantidade": 3},
-    {"cliente": "Valquiria", "codigo": 4494, "quantidade": 1},
-    {"cliente": "Valquiria", "codigo": 4701, "quantidade": 1},
-    # Vanessa
-    {"cliente": "Vanessa", "codigo": 4562, "quantidade": 1},
-    {"cliente": "Vanessa", "codigo": 4699, "quantidade": 3},
-    {"cliente": "Vanessa", "codigo": 4539, "quantidade": 1},
-    # Pamela
-    {"cliente": "Pamela", "codigo": 4681, "quantidade": 1},
-    {"cliente": "Pamela", "codigo": 4459, "quantidade": 1},
-    {"cliente": "Pamela", "codigo": 4497, "quantidade": 1},
-    {"cliente": "Pamela", "codigo": 4673, "quantidade": 1},
-    # Elan
-    {"cliente": "Elan", "codigo": 4470, "quantidade": 2},
-    # Claudinha
-    {"cliente": "Claudinha", "codigo": 2750, "quantidade": 1},
-    {"cliente": "Claudinha", "codigo": 4239, "quantidade": 2},
-    {"cliente": "Claudinha", "codigo": 4142, "quantidade": 2},
-    {"cliente": "Claudinha", "codigo": 4343, "quantidade": 1},
-    {"cliente": "Claudinha", "codigo": 4122, "quantidade": 1},
-]
+vendas_iniciais = []  # você pode preencher como antes se quiser os exemplos iniciais
 
-# Carregar ou criar dados
 clientes = carregar_dados(CLIENTES_FILE, clientes_iniciais)
 vendas = carregar_dados(VENDAS_FILE, vendas_iniciais)
 
-# Funções
 def cadastrar_cliente(nome):
     clientes.append({"nome": nome})
     salvar_dados(CLIENTES_FILE, clientes)
@@ -149,7 +93,6 @@ def calcular_totais():
         totais[cli] = totais.get(cli, 0) + valor
     return totais
 
-# Interface
 st.title("📦 Sistema de Vendas")
 
 menu = st.sidebar.radio("Menu", ["📊 Visão Geral", "👤 Clientes", "🛒 Vendas"])
@@ -166,13 +109,23 @@ if menu == "📊 Visão Geral":
 
 elif menu == "👤 Clientes":
     st.header("Gerenciar Clientes")
-    nome_cli = st.text_input("Novo cliente")
-    if st.button("Cadastrar cliente") and nome_cli:
-        cadastrar_cliente(nome_cli)
-        st.success(f"Cliente {nome_cli} cadastrado!")
-    st.write("Clientes cadastrados:")
-    for c in sorted(clientes, key=lambda x: x['nome'].lower()):
-        st.write(f"- {c['nome']}")
+    novo_nome = st.text_input("Cadastrar novo cliente")
+    if st.button("Cadastrar cliente") and novo_nome:
+        cadastrar_cliente(novo_nome)
+        st.success(f"Cliente {novo_nome} cadastrado!")
+
+    # busca com autocomplete
+    nomes = sorted([c['nome'] for c in clientes], key=str.lower)
+    busca = st.text_input("Buscar cliente (digite 2 letras para sugerir)").strip()
+    sugestoes = [n for n in nomes if busca.lower() in n.lower()] if len(busca) >= 2 else []
+
+    if sugestoes:
+        escolhido = st.selectbox("Selecione o cliente", sugestoes)
+        if escolhido:
+            st.subheader(f"📋 Dados de {escolhido}")
+            for v in [x for x in vendas if x['cliente'] == escolhido]:
+                prod = produtos.get(v["codigo"], {"nome": "Desconhecido", "preco": 0})
+                st.write(f"- {prod['nome']} ({v['quantidade']}x) - R$ {prod['preco']:.2f} cada")
 
 elif menu == "🛒 Vendas":
     st.header("Registrar Venda")
