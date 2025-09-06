@@ -2,441 +2,492 @@
 import streamlit as st
 from datetime import datetime
 
-# ===========================
-# Configuração de login
-# ===========================
-USERS = {
-    "Othavio": "122008",
-    "Isabela": "122008",
-}
-ACESSOS_FILE = "acessos.log"
+# =========================
+# Configuração da página
+# =========================
+st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-def registrar_acesso(nome, tipo):
+# =========================
+# Helpers
+# =========================
+def money(v):
     try:
-        with open(ACESSOS_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat(timespec='seconds')} — {tipo}: {nome}\n")
+        return f"R$ {float(v):.2f}"
+    except:
+        return "R$ 0.00"
+
+def log_acesso(usuario: str):
+    try:
+        with open("acessos.log", "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} - {usuario}\n")
     except Exception:
-        pass  # em ambiente restrito pode não permitir escrita
+        pass  # Em alguns ambientes pode não persistir; ignoramos erro.
 
-def do_login():
-    st.title("🔒 Login no Sistema de Vendas")
-    aba = st.radio("Escolha como entrar:", ["Usuário autorizado", "Entrar como visitante"])
+def init_state():
+    if "inited" in st.session_state:
+        return
 
-    if aba == "Usuário autorizado":
-        u = st.text_input("Usuário")
-        p = st.text_input("Senha", type="password")
-        if st.button("Entrar", use_container_width=True):
-            ok = False
-            for user, pwd in USERS.items():
-                if u.strip().lower() == user.lower() and p.strip().lower() == pwd.lower():
-                    ok = True
-                    st.session_state.logged_in = True
-                    st.session_state.user = user
-                    registrar_acesso(user, "USUÁRIO")
-                    break
-            if ok:
-                st.success(f"Bem-vindo(a), {st.session_state.user}!")
+    # ---- Usuários (login) ----
+    st.session_state.users = {
+        "othavio": "122008",
+        "isabela": "122008",
+    }
+
+    # ---- Produtos (catálogo) ----
+    st.session_state.produtos = {
+        3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
+        4416: {"nome": "Calcinha Inf Canelada", "preco": 13.00},
+        4497: {"nome": "Cueca Boxe Boss", "preco": 27.15},
+        4470: {"nome": "Cueca Boxe Adidas", "preco": 29.60},
+        4597: {"nome": "Cueca Boxe Roger", "preco": 29.00},
+        3625: {"nome": "Cueca Boxe Carlos", "preco": 28.50},
+        4685: {"nome": "Soutien Francesca", "preco": 52.95},
+        4351: {"nome": "Soutien Soft Ribana", "preco": 54.20},
+        3866: {"nome": "Soutien Edite", "preco": 48.80},
+        4696: {"nome": "Tangão Emanuela", "preco": 26.90},
+        4402: {"nome": "Cueca Fem Suede", "preco": 19.30},
+        4310: {"nome": "Tangao Nani Suede", "preco": 17.30},
+        2750: {"nome": "Calça Cós Laser", "preco": 24.90},
+        4705: {"nome": "Tanga Ilma", "preco": 27.70},  # preço atual do catálogo
+        4699: {"nome": "Tanga Bolívia", "preco": 18.90},
+        4539: {"nome": "Tanga Kamili", "preco": 19.35},
+        4726: {"nome": "Tanga Mapola", "preco": 22.70},
+        4640: {"nome": "Tanga Import. Neon", "preco": 18.50},
+        4187: {"nome": "Tanga Fio Zaira", "preco": 16.40},
+        4239: {"nome": "Tanga Fio Duplo Anelise", "preco": 16.80},
+        4142: {"nome": "Tanga Valdira", "preco": 16.50},
+        4592: {"nome": "Tanga Conforto Suede Estampada", "preco": 21.05},
+        3875: {"nome": "Tanga Nazaré", "preco": 17.50},
+        3698: {"nome": "Tanga Fio Cerejeira", "preco": 14.10},
+        4322: {"nome": "Conj. M/M Ribana", "preco": 37.50},
+        4719: {"nome": "Conjunto Camila", "preco": 68.90},
+        4462: {"nome": "Conjunto Cleide", "preco": 68.00},
+        4457: {"nome": "Conjunto Verena", "preco": 83.80},
+        4543: {"nome": "Conjunto Soft Mapola", "preco": 71.00},
+        4702: {"nome": "Top Sueli032", "preco": 58.40},
+        4494: {"nome": "Top Import Coração", "preco": 65.10},
+        4680: {"nome": "Samba Cançao Fernando", "preco": 51.25},
+        4498: {"nome": "Pijama Suede Silk", "preco": 117.20},
+        4673: {"nome": "Short Doll Alice Plus", "preco": 83.80},
+        4675: {"nome": "Short Doll Can. Regata", "preco": 74.55},
+        4681: {"nome": "Short Doll Inf. Alcinha", "preco": 41.20},
+        4562: {"nome": "Short Doll Analis", "preco": 65.10},
+        4701: {"nome": "Short Doll Brenda", "preco": 71.00},
+        4122: {"nome": "Calça Fem Mônica", "preco": 103.50},
+        4493: {"nome": "Meia Fem Analu Kit C/3", "preco": 25.50},
+        4343: {"nome": "Meia Sap Pompom Kit C/3", "preco": 28.20},
+        4184: {"nome": "Meia Masc Manhattan Kit", "preco": 25.20},
+        4458: {"nome": "Meia BB Pelúcia Fem", "preco": 19.75},
+        4459: {"nome": "Meia BB Pelucia Masc", "preco": 19.75},
+        4460: {"nome": "Meia Masc Saulo Kit C/3", "preco": 31.50},
+    }
+
+    # ---- Clientes e vendas (pré-registradas com preço da compra) ----
+    st.session_state.clientes = {
+        # Tabata - lista original com preço por item (inclui 4705 a 22,70 para Tabata)
+        "Tabata": [
+            {"codigo": 4685, "nome": "Soutien Francesca", "quantidade": 1, "preco_unit": 52.95},
+            {"codigo": 4184, "nome": "Meia Masc Manhattan Kit", "quantidade": 1, "preco_unit": 25.20},
+            {"codigo": 4351, "nome": "Soutien Soft Ribana", "quantidade": 1, "preco_unit": 54.20},
+            {"codigo": 3625, "nome": "Cueca Boxe Carlos", "quantidade": 1, "preco_unit": 28.50},
+            {"codigo": 4597, "nome": "Cueca Boxe Roger", "quantidade": 1, "preco_unit": 29.00},
+            {"codigo": 3900, "nome": "Cueca Boxe Inf Animada", "quantidade": 1, "preco_unit": 15.90},
+            {"codigo": 3900, "nome": "Cueca Boxe Inf Animada", "quantidade": 1, "preco_unit": 15.90},
+            {"codigo": 3900, "nome": "Cueca Boxe Inf Animada", "quantidade": 1, "preco_unit": 15.90},
+            {"codigo": 4597, "nome": "Cueca Boxe Roger", "quantidade": 1, "preco_unit": 29.00},
+            {"codigo": 4680, "nome": "Samba Cançao Fernando", "quantidade": 1, "preco_unit": 51.25},
+            {"codigo": 4726, "nome": "Tanga Mapola", "quantidade": 1, "preco_unit": 22.70},
+            {"codigo": 4539, "nome": "Tanga Kamili", "quantidade": 1, "preco_unit": 19.35},
+            {"codigo": 4640, "nome": "Tanga Import. Neon", "quantidade": 1, "preco_unit": 18.50},
+            {"codigo": 3875, "nome": "Tanga Nazaré", "quantidade": 1, "preco_unit": 17.50},
+            {"codigo": 4142, "nome": "Tanga Valdira", "quantidade": 1, "preco_unit": 16.50},
+            {"codigo": 4705, "nome": "Tanga Ilma", "quantidade": 1, "preco_unit": 22.70},  # preço da compra da Tabata
+        ],
+        # Valquiria
+        "Valquiria": [
+            {"codigo": 4702, "nome": "Top Sueli032", "quantidade": 1, "preco_unit": 58.40},
+            {"codigo": 4457, "nome": "Conjunto Verena", "quantidade": 1, "preco_unit": 83.80},
+            {"codigo": 4493, "nome": "Meia Fem Analu Kit C/3", "quantidade": 1, "preco_unit": 25.50},
+            {"codigo": 4310, "nome": "Tangao Nani Suede", "quantidade": 1, "preco_unit": 17.30},
+            {"codigo": 4705, "nome": "Tanga Ilma", "quantidade": 1, "preco_unit": 27.70},
+            {"codigo": 4705, "nome": "Tanga Ilma", "quantidade": 1, "preco_unit": 27.70},
+            {"codigo": 3698, "nome": "Tanga Fio Cerejeira", "quantidade": 1, "preco_unit": 14.10},
+            {"codigo": 3698, "nome": "Tanga Fio Cerejeira", "quantidade": 1, "preco_unit": 14.10},
+            {"codigo": 3698, "nome": "Tanga Fio Cerejeira", "quantidade": 1, "preco_unit": 14.10},
+            {"codigo": 4494, "nome": "Top Import Coração", "quantidade": 1, "preco_unit": 65.10},
+            {"codigo": 4701, "nome": "Short Doll Brenda", "quantidade": 1, "preco_unit": 71.00},
+        ],
+        # Vanessa
+        "Vanessa": [
+            {"codigo": 4562, "nome": "Short Doll Analis", "quantidade": 1, "preco_unit": 65.10},
+            {"codigo": 4699, "nome": "Tanga Bolívia", "quantidade": 1, "preco_unit": 18.90},
+            {"codigo": 4699, "nome": "Tanga Bolívia", "quantidade": 1, "preco_unit": 18.90},
+            {"codigo": 4699, "nome": "Tanga Bolívia", "quantidade": 1, "preco_unit": 18.90},
+            {"codigo": 4539, "nome": "Tanga Kamili", "quantidade": 1, "preco_unit": 19.35},
+        ],
+        # Pamela (com 4681 a 11,20 conforme você informou)
+        "Pamela": [
+            {"codigo": 4681, "nome": "Short Doll Inf. Alcinha", "quantidade": 1, "preco_unit": 11.20},
+            {"codigo": 4459, "nome": "Meia BB Pelucia Masc", "quantidade": 1, "preco_unit": 19.75},
+            {"codigo": 4497, "nome": "Cueca Boxe Boss", "quantidade": 1, "preco_unit": 27.15},
+            {"codigo": 4673, "nome": "Short Doll Alice Plus", "quantidade": 1, "preco_unit": 83.80},
+        ],
+        # Elan
+        "Elan": [
+            {"codigo": 4470, "nome": "Cueca Boxe Adidas", "quantidade": 1, "preco_unit": 29.60},
+            {"codigo": 4470, "nome": "Cueca Boxe Adidas", "quantidade": 1, "preco_unit": 29.60},
+        ],
+        # Claudinha (com quantidades)
+        "Claudinha": [
+            {"codigo": 2750, "nome": "Calça Cós Laser", "quantidade": 1, "preco_unit": 24.90},
+            {"codigo": 4239, "nome": "Tanga Fio Duplo Anelise", "quantidade": 2, "preco_unit": 16.80},
+            {"codigo": 4142, "nome": "Tanga Valdira", "quantidade": 2, "preco_unit": 16.50},
+            {"codigo": 4343, "nome": "Meia Sap Pompom Kit C/3", "quantidade": 1, "preco_unit": 28.20},
+            {"codigo": 4122, "nome": "Calça Fem Mônica", "quantidade": 1, "preco_unit": 103.50},
+        ],
+    }
+
+    st.session_state.logado = False
+    st.session_state.usuario = None
+    st.session_state.inited = True
+
+def total_cliente(nome: str) -> float:
+    vendas = st.session_state.clientes.get(nome, [])
+    return sum(v["quantidade"] * v["preco_unit"] for v in vendas)
+
+def total_geral() -> float:
+    return sum(total_cliente(c) for c in st.session_state.clientes.keys())
+
+def sugestoes_clientes(query: str):
+    if not query or len(query.strip()) < 2:
+        return []
+    q = query.strip().lower()
+    return sorted([c for c in st.session_state.clientes.keys() if q in c.lower()])
+
+def sugestoes_produtos(query: str):
+    if not query or len(query.strip()) < 2:
+        return []
+    q = query.strip().lower()
+    # retorna (codigo, nome, preco)
+    items = []
+    for cod, info in st.session_state.produtos.items():
+        texto = f"{cod} - {info['nome']}".lower()
+        if q in texto:
+            items.append((cod, info["nome"], info["preco"]))
+    items.sort(key=lambda x: (x[1].lower(), x[0]))
+    return items
+
+# =========================
+# Telas
+# =========================
+def tela_login():
+    st.title("🔐 Login")
+    col1, col2 = st.columns([1,1])
+
+    with col1:
+        st.subheader("Usuário cadastrado")
+        user = st.text_input("Usuário").strip().lower()
+        senha = st.text_input("Senha", type="password").strip()
+        if st.button("Entrar", type="primary", use_container_width=True):
+            if user in st.session_state.users and st.session_state.users[user].lower() == senha.lower():
+                st.session_state.logado = True
+                st.session_state.usuario = user
+                log_acesso(f"login::user::{user}")
                 st.rerun()
             else:
                 st.error("Usuário ou senha incorretos.")
-    else:
-        nome_visitante = st.text_input("Digite seu nome para entrar como visitante")
+
+    with col2:
+        st.subheader("Entrar como visitante")
+        visitante = st.text_input("Seu nome (obrigatório)").strip()
         if st.button("Entrar como visitante", use_container_width=True):
-            if not nome_visitante.strip():
-                st.warning("Por favor, digite um nome para entrar.")
-                return
-            st.session_state.logged_in = True
-            st.session_state.user = f"Visitante: {nome_visitante.strip()}"
-            registrar_acesso(nome_visitante.strip(), "VISITANTE")
-            st.success(f"Bem-vindo(a), {nome_visitante.strip()}!")
-            st.rerun()
+            if visitante:
+                st.session_state.logado = True
+                st.session_state.usuario = f"visitante-{visitante}"
+                log_acesso(f"login::visitante::{visitante}")
+                st.rerun()
+            else:
+                st.warning("Informe um nome para entrar como visitante.")
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+def tela_home():
+    st.title("📦 Sistema de Vendas")
+    st.subheader("Resumo Geral de Vendas")
 
-# ===========================
-# Produtos (catálogo)
-# ===========================
-produtos = {
-    3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
-    4416: {"nome": "Calcinha Inf Canelada", "preco": 13.00},
-    4497: {"nome": "Cueca Boxe Boss", "preco": 27.15},
-    4470: {"nome": "Cueca Boxe Adidas", "preco": 29.60},
-    4597: {"nome": "Cueca Boxe Roger", "preco": 29.00},
-    3625: {"nome": "Cueca Boxe Carlos", "preco": 28.50},
-    4685: {"nome": "Soutien Francesca", "preco": 52.95},
-    4351: {"nome": "Soutien Soft Ribana", "preco": 54.20},
-    3866: {"nome": "Soutien Edite", "preco": 48.80},
-    4696: {"nome": "Tangão Emanuela", "preco": 26.90},
-    4402: {"nome": "Cueca Fem Suede", "preco": 19.30},
-    4310: {"nome": "Tangao Nani Suede", "preco": 17.30},
-    2750: {"nome": "Calça Cós Laser", "preco": 24.90},
-    4705: {"nome": "Tanga Ilma", "preco": 27.70},
-    4699: {"nome": "Tanga Bolívia", "preco": 18.90},
-    4539: {"nome": "Tanga Kamili", "preco": 19.35},
-    4726: {"nome": "Tanga Mapola", "preco": 22.70},
-    4640: {"nome": "Tanga Import. Neon", "preco": 18.50},
-    4187: {"nome": "Tanga Fio Zaira", "preco": 16.40},
-    4239: {"nome": "Tanga Fio Duplo Anelise", "preco": 16.80},
-    4142: {"nome": "Tanga Valdira", "preco": 16.50},
-    4592: {"nome": "Tanga Conforto Suede Estampada", "preco": 21.05},
-    3875: {"nome": "Tanga Nazaré", "preco": 17.50},
-    3698: {"nome": "Tanga Fio Cerejeira", "preco": 14.10},
-    4322: {"nome": "Conj. M/M Ribana", "preco": 37.50},
-    4719: {"nome": "Conjunto Camila", "preco": 68.90},
-    4462: {"nome": "Conjunto Cleide", "preco": 68.00},
-    4457: {"nome": "Conjunto Verena", "preco": 83.80},
-    4543: {"nome": "Conjunto Soft Mapola", "preco": 71.00},
-    4702: {"nome": "Top Sueli032", "preco": 58.40},
-    4494: {"nome": "Top Import Coração", "preco": 65.10},
-    4680: {"nome": "Samba Cançao Fernando", "preco": 51.25},
-    4498: {"nome": "Pijama Suede Silk", "preco": 117.20},
-    4673: {"nome": "Short Doll Alice Plus", "preco": 83.80},
-    4675: {"nome": "Short Doll Can. Regata", "preco": 74.55},
-    4681: {"nome": "Short Doll Inf. Alcinha", "preco": 41.20},
-    4562: {"nome": "Short Doll Analis", "preco": 65.10},
-    4701: {"nome": "Short Doll Brenda", "preco": 71.00},
-    4122: {"nome": "Calça Fem Mônica", "preco": 103.50},
-    4493: {"nome": "Meia Fem Analu Kit C/3", "preco": 25.50},
-    4343: {"nome": "Meia Sap Pompom Kit C/3", "preco": 28.20},
-    4184: {"nome": "Meia Masc Manhattan Kit", "preco": 25.20},
-    4458: {"nome": "Meia BB Pelúcia Fem", "preco": 19.75},
-    4459: {"nome": "Meia BB Pelucia Masc", "preco": 19.75},
-    4460: {"nome": "Meia Masc Saulo Kit C/3", "preco": 31.50},
-}
+    total = total_geral()
+    comissao = total * 0.40
 
-# ===========================
-# Banco de dados (memória)
-# ===========================
-if "clientes" not in st.session_state:
-    st.session_state.clientes = {}
+    # Mostra totais por cliente (em ordem alfabética)
+    with st.container(border=True):
+        for c in sorted(st.session_state.clientes.keys(), key=lambda x: x.lower()):
+            st.write(f"- **{c}**: {money(total_cliente(c))}")
 
-def seed_inicial():
-    """Carrega clientes e vendas que você me passou (somente 1x)."""
-    if st.session_state.clientes:
-        return
-    add = lambda nome: st.session_state.clientes.setdefault(nome, {"vendas": []})
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total geral", money(total))
+    with col2:
+        st.metric("Comissão (40%)", money(comissao))
 
-    def venda(nome, codigo, qtd, valor_unit):
-        prod = produtos.get(codigo, {"nome": f"Código {codigo}"})
-        st.session_state.clientes[nome]["vendas"].append({
-            "codigo": codigo,
-            "nome": prod["nome"],
-            "quantidade": int(qtd),
-            "valor": float(valor_unit),
-        })
+def tela_clientes():
+    st.header("👥 Clientes")
+    aba = st.tabs(["Consultar / Editar", "Cadastrar"])[0]
 
-    # Clientes
-    add("Tabata")
-    add("Valquiria")
-    add("Vanessa")
-    add("Pamela")
-    add("Elan")
-    add("Claudinha")
+    with st.expander("Buscar cliente (digite pelo menos 2 letras)", expanded=True):
+        busca = st.text_input("Buscar", placeholder="Ex.: ta, va, pa ... (não precisa acento)").strip()
+        sugest = sugestoes_clientes(busca)
+        cliente_sel = None
+        if sugest:
+            cliente_sel = st.selectbox("Selecione o cliente", sugest, index=0)
 
-    # TABATA (usando os valores informados por você; 4705 = 22,70)
-    venda("Tabata", 4685, 1, 52.95)
-    venda("Tabata", 4184, 1, 25.20)
-    venda("Tabata", 4351, 1, 54.20)
-    venda("Tabata", 3625, 1, 28.50)
-    venda("Tabata", 4597, 2, 29.00)
-    venda("Tabata", 3900, 3, 15.90)
-    venda("Tabata", 4680, 1, 51.25)
-    venda("Tabata", 4726, 1, 22.70)
-    venda("Tabata", 4539, 1, 19.35)
-    venda("Tabata", 4640, 1, 18.50)
-    venda("Tabata", 3875, 1, 17.50)
-    venda("Tabata", 4142, 1, 16.50)
-    venda("Tabata", 4705, 1, 22.70)
+    if cliente_sel:
+        vendas = st.session_state.clientes.get(cliente_sel, [])
+        st.subheader(f"Cliente: {cliente_sel}")
+        st.caption("As vendas só aparecem depois que você seleciona o cliente.")
+        if not vendas:
+            st.info("Nenhuma venda registrada para este cliente.")
+        else:
+            # Lista de vendas com ações
+            for idx, v in enumerate(vendas):
+                cod = v["codigo"]
+                nomep = v.get("nome") or st.session_state.produtos.get(cod, {}).get("nome", "Produto")
+                preco = v["preco_unit"]
+                qtd = v["quantidade"]
+                with st.expander(f"{nomep} ({qtd}x) - {money(preco)} cada", expanded=False):
+                    c1, c2, c3, c4 = st.columns([2,1,1,1])
+                    with c1:
+                        novo_nome = st.text_input("Nome do produto (venda)", value=nomep, key=f"vn_{cliente_sel}_{idx}")
+                    with c2:
+                        nova_qtd = st.number_input("Qtd", min_value=1, value=int(qtd), step=1, key=f"vq_{cliente_sel}_{idx}")
+                    with c3:
+                        novo_preco = st.number_input("Preço unit.", min_value=0.0, value=float(preco), step=0.10, format="%.2f", key=f"vp_{cliente_sel}_{idx}")
+                    with c4:
+                        if st.button("Salvar", key=f"vsave_{cliente_sel}_{idx}"):
+                            v["nome"] = novo_nome
+                            v["quantidade"] = int(nova_qtd)
+                            v["preco_unit"] = float(novo_preco)
+                            st.success("Venda atualizada!")
+                            st.rerun()
+                        if st.button("Apagar", key=f"vdel_{cliente_sel}_{idx}"):
+                            st.session_state.clientes[cliente_sel].pop(idx)
+                            st.warning("Venda removida.")
+                            st.rerun()
 
-    # VALQUIRIA (tot = 418,80)
-    venda("Valquiria", 4702, 1, 58.40)
-    venda("Valquiria", 4457, 1, 83.80)
-    venda("Valquiria", 4493, 1, 25.50)
-    venda("Valquiria", 4310, 1, 17.30)
-    venda("Valquiria", 4705, 2, 27.70)
-    venda("Valquiria", 3698, 3, 14.10)
-    venda("Valquiria", 4494, 1, 65.10)
-    venda("Valquiria", 4701, 1, 71.00)
+            st.markdown(f"**Total do cliente:** {money(total_cliente(cliente_sel))}")
 
-    # VANESSA (tot = 141,15)
-    venda("Vanessa", 4562, 1, 65.10)
-    venda("Vanessa", 4699, 3, 18.90)
-    venda("Vanessa", 4539, 1, 19.35)
+        st.divider()
+        with st.expander("⋯ Ações do cliente"):
+            colA, colB = st.columns(2)
+            with colA:
+                novo_nome_cli = st.text_input("Renomear cliente", value=cliente_sel, key=f"rn_{cliente_sel}")
+                if st.button("Salvar novo nome", key=f"rnsave_{cliente_sel}"):
+                    if novo_nome_cli and novo_nome_cli not in st.session_state.clientes:
+                        st.session_state.clientes[novo_nome_cli] = st.session_state.clientes.pop(cliente_sel)
+                        st.success("Cliente renomeado.")
+                        st.rerun()
+                    else:
+                        st.warning("Informe um nome válido e que não exista.")
+            with colB:
+                if st.button("Apagar cliente", type="secondary", key=f"rmd_{cliente_sel}"):
+                    st.session_state.clientes.pop(cliente_sel, None)
+                    st.warning("Cliente apagado.")
+                    st.rerun()
 
-    # PAMELA (usa 4681 = 11,20 como informado; tot = 141,90)
-    venda("Pamela", 4681, 1, 11.20)
-    venda("Pamela", 4459, 1, 19.75)
-    venda("Pamela", 4497, 1, 27.15)
-    venda("Pamela", 4673, 1, 83.80)
+    # Aba: Cadastrar
+    with st.tabs(["Consultar / Editar", "Cadastrar"])[1]:
+        st.subheader("Cadastrar novo cliente")
+        nome = st.text_input("Nome do cliente").strip()
+        if st.button("Cadastrar cliente", type="primary"):
+            if nome and nome not in st.session_state.clientes:
+                st.session_state.clientes[nome] = []
+                st.success("Cliente cadastrado!")
+            else:
+                st.warning("Nome inválido ou já existe.")
 
-    # ELAN (tot = 59,20)
-    venda("Elan", 4470, 2, 29.60)
-
-    # CLAUDINHA (tot = 223,20)
-    venda("Claudinha", 2750, 1, 24.90)
-    venda("Claudinha", 4239, 2, 16.80)
-    venda("Claudinha", 4142, 2, 16.50)
-    venda("Claudinha", 4343, 1, 28.20)
-    venda("Claudinha", 4122, 1, 103.50)
-
-seed_inicial()
-
-# ===========================
-# Utilidades
-# ===========================
-def total_cliente(nome):
-    return sum(v["quantidade"] * v["valor"] for v in st.session_state.clientes[nome]["vendas"])
-
-def total_geral():
-    return sum(total_cliente(n) for n in st.session_state.clientes)
-
-def fmt_moeda(v):
-    return f"R$ {v:.2f}"
-
-def buscar_clientes(prefix):
-    if len(prefix) < 2:
-        return []
-    prefix = prefix.lower().strip()
-    return sorted([c for c in st.session_state.clientes if prefix in c.lower()], key=lambda x: x.lower())
-
-def buscar_produtos(q):
-    if len(q) < 2:
-        return []
-    ql = q.lower().strip()
-    out = []
-    for cod, p in produtos.items():
-        if ql in p["nome"].lower() or ql in str(cod):
-            out.append((cod, p["nome"], p["preco"]))
-    out.sort(key=lambda x: x[1].lower())
-    return out
-
-# ===========================
-# Páginas / Ações
-# ===========================
-def pagina_resumo():
-    st.header("📦 Sistema de Vendas")
-    tg = total_geral()
-    st.subheader(f"💰 Total geral: {fmt_moeda(tg)}")
-    st.subheader(f"💸 Comissão (40%): {fmt_moeda(tg * 0.40)}")
-
-def pagina_cadastrar_cliente():
-    st.header("👤 Cadastrar cliente")
-    nome = st.text_input("Nome do cliente")
-    if st.button("Cadastrar", use_container_width=True):
-        if not nome.strip():
-            st.warning("Digite um nome.")
-            return
-        if nome.strip() in st.session_state.clientes:
-            st.error("Já existe um cliente com esse nome.")
-            return
-        st.session_state.clientes[nome.strip()] = {"vendas": []}
-        st.success(f"Cliente {nome.strip()} cadastrado!")
-
-def pagina_registrar_venda():
+def tela_registrar_venda():
     st.header("🛒 Registrar venda")
 
-    # Buscar cliente
-    busca_cli = st.text_input("Busque o cliente (digite ao menos 2 letras)")
-    sugestoes = buscar_clientes(busca_cli)
-    cliente = st.selectbox("Selecione o cliente", [""] + sugestoes, index=0)
-    if not cliente:
-        st.info("Digite ao menos 2 letras para buscar o cliente.")
+    # Selecionar/filtrar cliente
+    with st.expander("Cliente", expanded=True):
+        busca = st.text_input("Buscar cliente (2+ letras)").strip()
+        sugest = sugestoes_clientes(busca)
+        cliente_sel = st.selectbox("Selecione o cliente", sugest, index=0) if sugest else None
+
+        colc1, colc2 = st.columns([2,1])
+        with colc1:
+            novo_cliente = st.text_input("Ou cadastre um cliente novo (opcional)").strip()
+        with colc2:
+            if st.button("Cadastrar novo cliente aqui"):
+                if novo_cliente and novo_cliente not in st.session_state.clientes:
+                    st.session_state.clientes[novo_cliente] = []
+                    st.success(f"Cliente '{novo_cliente}' cadastrado!")
+                    cliente_sel = novo_cliente
+                else:
+                    st.warning("Informe um nome válido que não exista.")
+
+    if not cliente_sel:
+        st.info("Selecione ou cadastre um cliente para continuar.")
         return
+
+    # Selecionar/filtrar produto
+    with st.expander("Produto", expanded=True):
+        qprod = st.text_input("Buscar produto por nome/código (2+ letras)").strip()
+        sugest_p = sugestoes_produtos(qprod)
+        opt_text = [f"{cod} - {nome} ({money(preco)})" for cod, nome, preco in sugest_p] if sugest_p else []
+        sel_idx = st.selectbox("Selecione o produto", list(range(len(opt_text))), format_func=lambda i: opt_text[i] if opt_text else "Nenhum", index=0 if opt_text else None) if opt_text else None
+
+        if sel_idx is not None:
+            cod, nomep, preco_catalogo = sugest_p[sel_idx]
+            qtd = st.number_input("Quantidade", min_value=1, value=1, step=1)
+            preco_unit = st.number_input("Preço da venda (pode ajustar)", min_value=0.0, value=float(preco_catalogo), step=0.10, format="%.2f")
+            if st.button("Adicionar à venda", type="primary"):
+                st.session_state.clientes[cliente_sel].append({
+                    "codigo": cod,
+                    "nome": nomep,
+                    "quantidade": int(qtd),
+                    "preco_unit": float(preco_unit),
+                })
+                st.success("Item adicionado!")
+                st.rerun()
+        else:
+            st.info("Digite para ver sugestões de produtos.")
+
+    # Resumo da venda do cliente
+    st.subheader(f"Carrinho / Itens do cliente: {cliente_sel}")
+    vendas = st.session_state.clientes.get(cliente_sel, [])
+    if not vendas:
+        st.write("Nenhum item para este cliente.")
+    else:
+        for idx, v in enumerate(vendas):
+            st.write(f"- {v['nome']} ({v['quantidade']}x) — {money(v['preco_unit'])} cada  → **{money(v['quantidade']*v['preco_unit'])}**")
+        st.markdown(f"**Total do cliente:** {money(total_cliente(cliente_sel))}")
+
+def tela_produtos():
+    st.header("📦 Produtos")
+    with st.expander("Adicionar produto", expanded=False):
+        ncod = st.text_input("Código (número)").strip()
+        nnome = st.text_input("Nome do produto").strip()
+        npreco = st.number_input("Preço", min_value=0.0, value=0.0, step=0.10, format="%.2f")
+        if st.button("Adicionar produto", type="primary"):
+            if not ncod.isdigit():
+                st.warning("Código deve ser numérico.")
+            else:
+                icod = int(ncod)
+                if icod in st.session_state.produtos:
+                    st.warning("Já existe produto com este código.")
+                elif not nnome:
+                    st.warning("Informe o nome do produto.")
+                else:
+                    st.session_state.produtos[icod] = {"nome": nnome, "preco": float(npreco)}
+                    st.success("Produto cadastrado!")
 
     # Buscar produto
-    q = st.text_input("Busque o produto por nome ou código (min. 2 letras/números)")
-    matches = buscar_produtos(q)
-    if matches:
-        label = [f"{cod} — {nome} — {fmt_moeda(preco)}" for cod, nome, preco in matches]
-        escolha = st.selectbox("Escolha o produto", label)
-        idx = label.index(escolha)
-        cod, nome_prod, preco_cat = matches[idx]
-    else:
-        st.info("Digite ao menos 2 caracteres para ver sugestões de produtos.")
-        return
+    q = st.text_input("Buscar produto (nome/código, 2+ letras)").strip()
+    lista = list(st.session_state.produtos.items())
+    if len(q) >= 2:
+        ql = q.lower()
+        lista = [(c, p) for c, p in lista if ql in f"{c} - {p['nome']}".lower()]
+    lista.sort(key=lambda x: (x[1]["nome"].lower(), x[0]))
 
-    qtd = st.number_input("Quantidade", min_value=1, step=1, value=1)
-    alterar_preco = st.checkbox("Alterar preço desta venda?")
-    if alterar_preco:
-        preco_uso = st.number_input("Preço unitário (R$)", min_value=0.0, step=0.10, value=float(preco_cat))
-    else:
-        preco_uso = float(preco_cat)
-
-    if st.button("Adicionar à venda", use_container_width=True):
-        st.session_state.clientes[cliente]["vendas"].append({
-            "codigo": int(cod),
-            "nome": nome_prod,
-            "quantidade": int(qtd),
-            "valor": float(preco_uso),
-        })
-        st.success(f"Adicionado: {qtd}x {nome_prod} para {cliente} ({fmt_moeda(preco_uso)} cada).")
-
-def pagina_consultar_cliente():
-    st.header("🔎 Consultar cliente")
-    busca_cli = st.text_input("Busque o cliente (digite ao menos 2 letras)")
-    sugestoes = buscar_clientes(busca_cli)
-    cliente = st.selectbox("Selecione o cliente", [""] + sugestoes, index=0)
-    if not cliente:
-        st.info("Digite ao menos 2 letras e selecione um cliente.")
-        return
-
-    # Cabeçalho com ações do cliente
-    cols = st.columns([1, 0.15])
-    with cols[0]:
-        st.subheader(f"Vendas de {cliente}")
-    with cols[1]:
-        with st.popover("⋯", use_container_width=True):
-            novo_nome = st.text_input("Renomear cliente", value=cliente, key=f"ren_{cliente}")
-            if st.button("Salvar nome", key=f"save_ren_{cliente}", use_container_width=True):
-                if not novo_nome.strip():
-                    st.warning("Nome não pode ser vazio.")
-                elif novo_nome.strip() in st.session_state.clientes and novo_nome.strip() != cliente:
-                    st.error("Já existe um cliente com esse nome.")
-                else:
-                    st.session_state.clientes[novo_nome.strip()] = st.session_state.clientes.pop(cliente)
-                    st.success("Cliente renomeado!")
+    # Listagem com edição
+    for cod, info in lista:
+        with st.expander(f"{cod} - {info['nome']} ({money(info['preco'])})", expanded=False):
+            nnome = st.text_input("Nome", value=info["nome"], key=f"p_nome_{cod}")
+            npreco = st.number_input("Preço", value=float(info["preco"]), step=0.10, format="%.2f", key=f"p_preco_{cod}")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Salvar alterações", key=f"p_save_{cod}"):
+                    st.session_state.produtos[cod]["nome"] = nnome
+                    st.session_state.produtos[cod]["preco"] = float(npreco)
+                    st.success("Produto atualizado.")
                     st.rerun()
-            st.divider()
-            if st.button("Apagar cliente", type="primary", key=f"del_{cliente}", use_container_width=True):
-                st.session_state.clientes.pop(cliente, None)
-                st.success("Cliente apagado.")
-                st.rerun()
-
-    # Lista de vendas com menu ⋯
-    vendas = st.session_state.clientes[cliente]["vendas"]
-    if not vendas:
-        st.info("Nenhuma venda registrada.")
-        return
-
-    total = 0.0
-    for i, v in enumerate(vendas):
-        col1, col2 = st.columns([0.85, 0.15])
-        with col1:
-            st.write(f"**{i+1}.** {v['nome']} — {v['quantidade']}x — {fmt_moeda(v['valor'])} cada")
-        with col2:
-            with st.popover("⋯", key=f"pop_{cliente}_{i}", use_container_width=True):
-                qtd = st.number_input("Quantidade", min_value=1, value=int(v["quantidade"]), step=1, key=f"q_{cliente}_{i}")
-                preco = st.number_input("Preço unit.", min_value=0.0, value=float(v["valor"]), step=0.10, key=f"p_{cliente}_{i}")
-                if st.button("Salvar", key=f"save_{cliente}_{i}", use_container_width=True):
-                    v["quantidade"] = int(qtd)
-                    v["valor"] = float(preco)
-                    st.success("Venda atualizada!")
+            with c2:
+                if st.button("Apagar produto", key=f"p_del_{cod}"):
+                    st.session_state.produtos.pop(cod, None)
+                    st.warning("Produto apagado.")
                     st.rerun()
-                st.divider()
-                if st.button("Apagar item", key=f"delitem_{cliente}_{i}", use_container_width=True):
-                    vendas.pop(i)
-                    st.success("Item removido.")
-                    st.rerun()
-        total += v["quantidade"] * v["valor"]
 
-    st.markdown(f"**Total do cliente: {fmt_moeda(total)}**")
-
-def pagina_relatorios():
-    st.header("📑 Relatórios")
-    escolha = st.radio("Escolha o relatório:", ["Relatório geral", "Relatório de um cliente", "Comissão total"])
+def tela_relatorios():
+    st.header("📊 Relatórios")
+    escolha = st.radio("Escolha:", ["Relatório geral", "Relatório de um cliente", "Comissão total"], horizontal=True)
 
     if escolha == "Relatório geral":
-        tg = total_geral()
         linhas = ["📋 *Relatório Geral de Vendas*", ""]
-        for nome in sorted(st.session_state.clientes.keys(), key=lambda x: x.lower()):
-            linhas.append(f"- {nome}: {fmt_moeda(total_cliente(nome))}")
+        tot_geral = 0.0
+        for c in sorted(st.session_state.clientes.keys(), key=lambda x: x.lower()):
+            t = total_cliente(c)
+            tot_geral += t
+            linhas.append(f"- {c}: {money(t)}")
         linhas.append("")
-        linhas.append(f"💰 *Total geral*: {fmt_moeda(tg)}")
-        linhas.append(f"💸 *Comissão (40%)*: {fmt_moeda(tg*0.40)}")
+        linhas.append(f"💰 *Total geral*: {money(tot_geral)}")
+        linhas.append(f"💸 *Comissão (40%)*: {money(tot_geral*0.40)}")
+
         texto = "\n".join(linhas)
-        st.text_area("Copie e cole no WhatsApp", value=texto, height=260)
+        st.text_area("Copie e cole no WhatsApp:", value=texto, height=220)
 
     elif escolha == "Relatório de um cliente":
-        busca_cli = st.text_input("Busque o cliente (min. 2 letras)")
-        sugestoes = buscar_clientes(busca_cli)
-        cliente = st.selectbox("Selecione o cliente", [""] + sugestoes)
-        if cliente:
-            vendas = st.session_state.clientes[cliente]["vendas"]
-            tot = total_cliente(cliente)
-            linhas = [f"📋 *Relatório de {cliente}*", ""]
+        busca = st.text_input("Buscar cliente (2+ letras)").strip()
+        sugest = sugestoes_clientes(busca)
+        cliente_sel = st.selectbox("Selecione o cliente", sugest) if sugest else None
+        if cliente_sel:
+            vendas = st.session_state.clientes.get(cliente_sel, [])
+            linhas = [f"📋 *Relatório de {cliente_sel}*", ""]
+            total_c = 0.0
+            # Agrupar por produto (somar quantidades iguais)
+            # Como os registros podem se repetir, vamos consolidar por (codigo, nome, preco_unit)
+            from collections import defaultdict
+            agg = defaultdict(lambda: {"qtd":0, "preco":0.0, "nome":""})
             for v in vendas:
-                linhas.append(f"- {v['nome']} ({v['quantidade']}x): {fmt_moeda(v['quantidade']*v['valor'])}")
+                key = (v["codigo"], v.get("nome",""), float(v["preco_unit"]))
+                agg[key]["qtd"] += int(v["quantidade"])
+                agg[key]["preco"] = float(v["preco_unit"])
+                agg[key]["nome"] = v.get("nome","")
+
+            for (cod, nomep, preco), val in sorted(agg.items(), key=lambda k: k[0][1].lower()):
+                subtotal = val["qtd"] * val["preco"]
+                total_c += subtotal
+                linhas.append(f"- {nomep} ({val['qtd']}x): {money(subtotal)}")
+
             linhas.append("")
-            linhas.append(f"💰 Total do cliente: {fmt_moeda(tot)}")
-            st.text_area("Copie e cole no WhatsApp", value="\n".join(linhas), height=260)
+            linhas.append(f"💰 Total do cliente: {money(total_c)}")
+            st.text_area("Copie e cole no WhatsApp:", value="\n".join(linhas), height=220)
         else:
-            st.info("Selecione um cliente para gerar o relatório.")
+            st.info("Digite para ver sugestões e selecione o cliente.")
 
     else:  # Comissão total
-        tg = total_geral()
-        st.subheader(f"💸 Comissão total (40%): {fmt_moeda(tg*0.40)}")
+        t = total_geral()
+        st.metric("💸 Comissão total (40%)", money(t*0.40))
 
-def pagina_produtos():
-    st.header("🧰 Produtos")
-    # Buscar
-    q = st.text_input("Buscar produto por nome ou código (min. 2 caracteres)")
-    results = buscar_produtos(q) if len(q) >= 2 else []
-    if results:
-        for cod, nome, preco in results:
-            c1, c2 = st.columns([0.8, 0.2])
-            with c1:
-                st.write(f"**{cod}** — {nome} — {fmt_moeda(preco)}")
-            with c2:
-                with st.popover("⋯", key=f"pp_{cod}", use_container_width=True):
-                    novo_nome = st.text_input("Nome", value=nome, key=f"pn_{cod}")
-                    novo_preco = st.number_input("Preço (R$)", min_value=0.0, value=float(preco), step=0.10, key=f"ppp_{cod}")
-                    if st.button("Salvar", key=f"ps_{cod}", use_container_width=True):
-                        produtos[cod]["nome"] = novo_nome.strip() or nome
-                        produtos[cod]["preco"] = float(novo_preco)
-                        st.success("Produto atualizado!")
-                        st.rerun()
-                    st.divider()
-                    if st.button("Apagar produto", key=f"pd_{cod}", use_container_width=True):
-                        produtos.pop(cod, None)
-                        st.success("Produto removido.")
-                        st.rerun()
+# =========================
+# Layout principal
+# =========================
+def main():
+    init_state()
+    if not st.session_state.logado:
+        tela_login()
+        return
+
+    # Menu lateral
+    with st.sidebar:
+        st.markdown(f"**Usuário:** {st.session_state.usuario}")
+        pagina = st.radio(
+            "Menu",
+            ["Início", "Clientes", "Registrar venda", "Produtos", "Relatórios", "Sair"],
+            index=0
+        )
+
+    if pagina == "Início":
+        tela_home()
+    elif pagina == "Clientes":
+        tela_clientes()
+    elif pagina == "Registrar venda":
+        tela_registrar_venda()
+    elif pagina == "Produtos":
+        tela_produtos()
+    elif pagina == "Relatórios":
+        tela_relatorios()
     else:
-        st.info("Digite ao menos 2 caracteres para buscar.")
-
-    st.markdown("---")
-    st.subheader("Adicionar novo produto")
-    nc = st.text_input("Código (numérico)")
-    nn = st.text_input("Nome")
-    np = st.number_input("Preço (R$)", min_value=0.0, step=0.10)
-    if st.button("Adicionar produto", use_container_width=True):
-        if not nc.isdigit():
-            st.warning("Código deve ser numérico.")
-            return
-        cod = int(nc)
-        if cod in produtos:
-            st.error("Já existe produto com esse código.")
-            return
-        if not nn.strip():
-            st.warning("Digite um nome para o produto.")
-            return
-        produtos[cod] = {"nome": nn.strip(), "preco": float(np)}
-        st.success("Produto adicionado!")
+        # Sair
+        st.session_state.clear()
         st.rerun()
 
-# ===========================
-# Fluxo principal
-# ===========================
-if not st.session_state.logged_in:
-    do_login()
-    st.stop()
-
-st.sidebar.caption(f"👤 {st.session_state.user}")
-menu = st.sidebar.radio(
-    "Menu",
-    ["Resumo", "Cadastrar cliente", "Registrar venda", "Consultar cliente", "Relatórios", "Produtos"],
-    index=0
-)
-
-if menu == "Resumo":
-    pagina_resumo()
-elif menu == "Cadastrar cliente":
-    pagina_cadastrar_cliente()
-elif menu == "Registrar venda":
-    pagina_registrar_venda()
-elif menu == "Consultar cliente":
-    pagina_consultar_cliente()
-elif menu == "Relatórios":
-    pagina_relatorios()
-elif menu == "Produtos":
-    pagina_produtos()
+if __name__ == "__main__":
+    main()
