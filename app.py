@@ -5,144 +5,136 @@ import streamlit as st
 # Banco de dados em memória
 # =========================
 
+produtos = {
+    3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
+    4416: {"nome": "Calcinha Inf Canelada", "preco": 13.00},
+    4497: {"nome": "Cueca Boxe Boss", "preco": 27.15},
+    4470: {"nome": "Cueca Boxe Adidas", "preco": 29.60},
+    4597: {"nome": "Cueca Boxe Roger", "preco": 29.00},
+    3625: {"nome": "Cueca Boxe Carlos", "preco": 28.50},
+    4685: {"nome": "Soutien Francesca", "preco": 52.95},
+    4351: {"nome": "Soutien Soft Ribana", "preco": 54.20},
+    3866: {"nome": "Soutien Edite", "preco": 48.80},
+    4696: {"nome": "Tangão Emanuela", "preco": 26.90},
+    4402: {"nome": "Cueca Fem Suede", "preco": 19.30},
+    4310: {"nome": "Tangao Nani Suede", "preco": 17.30},
+    2750: {"nome": "Calça Cós Laser", "preco": 24.90},
+    4705: {"nome": "Tanga Ilma", "preco": 27.70}, # atualizado pelo que você mandou
+    4699: {"nome": "Tanga Bolívia", "preco": 18.90},
+    4539: {"nome": "Tanga Kamili", "preco": 19.35},
+    4726: {"nome": "Tanga Mapola", "preco": 22.70},
+    4640: {"nome": "Tanga Import. Neon", "preco": 18.50},
+    4187: {"nome": "Tanga Fio Zaira", "preco": 16.40},
+    4239: {"nome": "Tanga Fio Duplo Anelise", "preco": 16.80},
+    4142: {"nome": "Tanga Valdira", "preco": 16.50},
+    4592: {"nome": "Tanga Conforto Suede Estampada", "preco": 21.05},
+    3875: {"nome": "Tanga Nazaré", "preco": 17.50},
+    3698: {"nome": "Tanga Fio Cerejeira", "preco": 14.10},
+    4322: {"nome": "Conj. M/M Ribana", "preco": 37.50},
+    4719: {"nome": "Conjunto Camila", "preco": 68.90},
+    4462: {"nome": "Conjunto Cleide", "preco": 68.00},
+    4457: {"nome": "Conjunto Verena", "preco": 83.80},
+    4543: {"nome": "Conjunto Soft Mapola", "preco": 71.00},
+    4702: {"nome": "Top Sueli032", "preco": 58.40},
+    4494: {"nome": "Top Import Coração", "preco": 65.10},
+    4680: {"nome": "Samba Cançao Fernando", "preco": 51.25},
+    4498: {"nome": "Pijama Suede Silk", "preco": 117.20},
+    4673: {"nome": "Short Doll Alice Plus", "preco": 83.80},
+    4675: {"nome": "Short Doll Can. Regata", "preco": 74.55},
+    4681: {"nome": "Short Doll Inf. Alcinha", "preco": 41.20},
+    4562: {"nome": "Short Doll Analis", "preco": 65.10},
+    4701: {"nome": "Short Doll Brenda", "preco": 71.00},
+    4122: {"nome": "Calça Fem Mônica", "preco": 103.50},
+    4493: {"nome": "Meia Fem Analu Kit C/3", "preco": 25.50},
+    4343: {"nome": "Meia Sap Pompom Kit C/3", "preco": 28.20},
+    4184: {"nome": "Meia Masc Manhattan Kit", "preco": 25.20},
+    4458: {"nome": "Meia BB Pelúcia Fem", "preco": 19.75},
+    4459: {"nome": "Meia BB Pelucia Masc", "preco": 19.75},
+    4460: {"nome": "Meia Masc Saulo Kit C/3", "preco": 31.50},
+}
+
 clientes = {
     "Tabata": [
-        {"codigo": 4685, "produto": "Soutien Francesca", "quantidade": 1, "valor": 52.95},
-        {"codigo": 4184, "produto": "Meia Masc Manhattan Kit", "quantidade": 1, "valor": 25.20},
-        {"codigo": 4351, "produto": "Soutien Soft Ribana", "quantidade": 1, "valor": 54.20},
-        {"codigo": 3625, "produto": "Cueca Boxe Carlos", "quantidade": 1, "valor": 28.50},
-        {"codigo": 4597, "produto": "Cueca Boxe Roger", "quantidade": 2, "valor": 29.00},
-        {"codigo": 3900, "produto": "Cueca Boxe Inf Animada", "quantidade": 3, "valor": 15.90},
-        {"codigo": 4680, "produto": "Samba Canção Fernando", "quantidade": 1, "valor": 51.25},
-        {"codigo": 4726, "produto": "Tanga Mapola", "quantidade": 1, "valor": 22.70},
-        {"codigo": 4539, "produto": "Tanga Kamili", "quantidade": 1, "valor": 19.35},
-        {"codigo": 4640, "produto": "Tanga Import Neon", "quantidade": 1, "valor": 18.50},
-        {"codigo": 3875, "produto": "Tanga Nazaré", "quantidade": 1, "valor": 17.50},
-        {"codigo": 4142, "produto": "Tanga Valdira", "quantidade": 1, "valor": 16.50},
-        {"codigo": 4705, "produto": "Tanga Ilma", "quantidade": 1, "valor": 22.70},
+        (4685, 1), (4184, 1), (4351, 1), (3625, 1), (4597, 1),
+        (3900, 3), (4597, 1), (4680, 1), (4726, 1), (4539, 1),
+        (4640, 1), (3875, 1), (4142, 1), (4705, 1)
     ],
     "Valquiria": [
-        {"codigo": 4702, "produto": "Top Sueli032", "quantidade": 1, "valor": 58.40},
-        {"codigo": 4457, "produto": "Conjunto Verena", "quantidade": 1, "valor": 83.80},
-        {"codigo": 4493, "produto": "Meia Fem Analu Kit C/3", "quantidade": 1, "valor": 25.50},
-        {"codigo": 4310, "produto": "Tangao Nani Suede", "quantidade": 1, "valor": 17.30},
-        {"codigo": 4705, "produto": "Tanga Ilma", "quantidade": 2, "valor": 27.70},
-        {"codigo": 3698, "produto": "Tanga Fio Cerejeira", "quantidade": 3, "valor": 14.10},
-        {"codigo": 4494, "produto": "Top Import Coração", "quantidade": 1, "valor": 65.10},
-        {"codigo": 4701, "produto": "Short Doll Brenda", "quantidade": 1, "valor": 71.00},
+        (4702, 1), (4457, 1), (4493, 1), (4310, 1),
+        (4705, 2), (3698, 3), (4494, 1), (4701, 1)
     ],
     "Vanessa": [
-        {"codigo": 4562, "produto": "Short Doll Analis", "quantidade": 1, "valor": 65.10},
-        {"codigo": 4699, "produto": "Tanga Bolívia", "quantidade": 3, "valor": 18.90},
-        {"codigo": 4539, "produto": "Tanga Kamili", "quantidade": 1, "valor": 19.35},
+        (4562, 1), (4699, 3), (4539, 1)
     ],
     "Pamela": [
-        {"codigo": 4681, "produto": "Short Doll Inf Alcinha", "quantidade": 1, "valor": 11.20},
-        {"codigo": 4459, "produto": "Meia BB Pelucia Masc", "quantidade": 1, "valor": 19.75},
-        {"codigo": 4497, "produto": "Cueca Boxe Boss", "quantidade": 1, "valor": 27.15},
-        {"codigo": 4673, "produto": "Short Doll Alice Plus", "quantidade": 1, "valor": 83.80},
+        (4681, 1), (4459, 1), (4497, 1), (4673, 1)
     ],
     "Elan": [
-        {"codigo": 4470, "produto": "Cueca Boxe Adidas", "quantidade": 2, "valor": 29.60},
+        (4470, 2)
     ],
     "Claudinha": [
-        {"codigo": 2750, "produto": "Calça Cós Laser", "quantidade": 1, "valor": 24.90},
-        {"codigo": 4239, "produto": "Tanga Fio Duplo Anelise", "quantidade": 2, "valor": 16.80},
-        {"codigo": 4142, "produto": "Tanga Valdira", "quantidade": 2, "valor": 16.50},
-        {"codigo": 4343, "produto": "Meia Sap Pompom C/3", "quantidade": 1, "valor": 28.20},
-        {"codigo": 4122, "produto": "Calça Fem Mônica", "quantidade": 1, "valor": 103.50},
-    ],
+        (2750, 1), (4239, 2), (4142, 2), (4343, 1), (4122, 1)
+    ]
 }
 
 # =========================
-# Funções utilitárias
+# Funções de negócio
 # =========================
 
-def calcular_total(cliente):
-    return sum(v["valor"] * v["quantidade"] for v in clientes.get(cliente, []))
+def calcular_total_cliente(vendas):
+    total = 0
+    for codigo, qtd in vendas:
+        if codigo in produtos:
+            total += produtos[codigo]["preco"] * qtd
+    return total
+
+def gerar_relatorio_cliente(nome):
+    if nome not in clientes:
+        return f"Cliente {nome} não encontrado."
+    linhas = [f"📋 *Relatório de {nome}*\n"]
+    total = 0
+    for codigo, qtd in clientes[nome]:
+        prod = produtos.get(codigo)
+        if prod:
+            subtotal = prod["preco"] * qtd
+            linhas.append(f"- {prod['nome']} ({qtd}x): R$ {subtotal:.2f}")
+            total += subtotal
+    linhas.append(f"\n💰 Total do cliente: R$ {total:.2f}")
+    return "\n".join(linhas)
+
+def gerar_relatorio_geral():
+    linhas = ["📋 *Relatório Geral de Vendas*\n"]
+    total_geral = 0
+    for nome, vendas in clientes.items():
+        total = calcular_total_cliente(vendas)
+        linhas.append(f"- {nome}: R$ {total:.2f}")
+        total_geral += total
+    linhas.append(f"\n💰 Total geral: R$ {total_geral:.2f}")
+    return "\n".join(linhas)
 
 def calcular_comissao_total():
-    total_vendas = sum(calcular_total(c) for c in clientes)
+    total_vendas = sum(calcular_total_cliente(v) for v in clientes.values())
     return total_vendas * 0.40
-
-def gerar_relatorio(tipo, cliente_nome=None):
-    if tipo == "geral":
-        linhas = ["📋 *Relatório Geral de Vendas*\n"]
-        for cliente in clientes:
-            linhas.append(f"👤 {cliente}")
-            for v in clientes[cliente]:
-                subtotal = v["valor"] * v["quantidade"]
-                linhas.append(f"- {v['produto']} ({v['quantidade']}x): R$ {subtotal:.2f}")
-            linhas.append(f"💰 Total do cliente: R$ {calcular_total(cliente):.2f}\n")
-        linhas.append(f"💰 *Comissão total*: R$ {calcular_comissao_total():.2f}")
-        return "\n".join(linhas)
-    elif tipo == "cliente" and cliente_nome:
-        if cliente_nome not in clientes:
-            return "Cliente não encontrado."
-        linhas = [f"📋 *Relatório de {cliente_nome}*\n"]
-        for v in clientes[cliente_nome]:
-            subtotal = v["valor"] * v["quantidade"]
-            linhas.append(f"- {v['produto']} ({v['quantidade']}x): R$ {subtotal:.2f}")
-        linhas.append(f"\n💰 Total do cliente: R$ {calcular_total(cliente_nome):.2f}")
-        return "\n".join(linhas)
-    elif tipo == "comissao":
-        return f"💰 Comissão total: R$ {calcular_comissao_total():.2f}"
-    else:
-        return "Opção inválida."
 
 # =========================
 # Interface Streamlit
 # =========================
 
-st.set_page_config(page_title="Sistema de Vendas", page_icon="📦", layout="wide")
+st.title("💼 Sistema de Vendas")
 
-st.title("📦 Sistema de Vendas")
+menu = st.sidebar.selectbox("Menu", [
+    "Ver relatório geral",
+    "Ver relatório de um cliente",
+    "Ver comissão total"
+])
 
-menu = st.sidebar.selectbox(
-    "Menu",
-    ["Cadastrar cliente", "Registrar venda", "Consultar cliente", "Extrato geral", "Comissão total", "Relatórios"]
-)
+if menu == "Ver relatório geral":
+    st.text_area("Copie e cole no WhatsApp:", gerar_relatorio_geral(), height=300)
 
-if menu == "Cadastrar cliente":
-    novo_nome = st.text_input("Nome do novo cliente")
-    if st.button("Cadastrar"):
-        if novo_nome in clientes:
-            st.warning("Cliente já existe!")
-        else:
-            clientes[novo_nome] = []
-            st.success(f"Cliente {novo_nome} cadastrado com sucesso!")
+elif menu == "Ver relatório de um cliente":
+    nome = st.selectbox("Selecione o cliente", list(clientes.keys()))
+    st.text_area("Copie e cole no WhatsApp:", gerar_relatorio_cliente(nome), height=300)
 
-elif menu == "Registrar venda":
-    cliente = st.selectbox("Selecione o cliente", list(clientes.keys()))
-    codigo = st.text_input("Código do produto")
-    produto = st.text_input("Nome do produto")
-    quantidade = st.number_input("Quantidade", min_value=1, value=1)
-    valor = st.number_input("Valor unitário (R$)", min_value=0.0, format="%.2f")
-    if st.button("Registrar"):
-        clientes[cliente].append({
-            "codigo": codigo,
-            "produto": produto,
-            "quantidade": quantidade,
-            "valor": valor
-        })
-        st.success(f"Venda registrada para {cliente}!")
-
-elif menu == "Consultar cliente":
-    cliente = st.selectbox("Selecione o cliente", list(clientes.keys()))
-    st.text(gerar_relatorio("cliente", cliente))
-
-elif menu == "Extrato geral":
-    st.text(gerar_relatorio("geral"))
-
-elif menu == "Comissão total":
-    st.text(gerar_relatorio("comissao"))
-
-elif menu == "Relatórios":
-    opc = st.selectbox("Escolha o relatório", ["Geral", "De um cliente", "Comissão total"])
-    if opc == "Geral":
-        st.text(gerar_relatorio("geral"))
-    elif opc == "De um cliente":
-        cliente = st.selectbox("Selecione o cliente", list(clientes.keys()))
-        st.text(gerar_relatorio("cliente", cliente))
-    else:
-        st.text(gerar_relatorio("comissao"))
+elif menu == "Ver comissão total":
+    comissao = calcular_comissao_total()
+    st.success(f"💰 Comissão total (40%): R$ {comissao:.2f}")
