@@ -1,147 +1,148 @@
+# app.py
 import streamlit as st
 
 # =========================
 # Banco de dados em memória
 # =========================
-produtos = {
-    4470: {"nome": "Cueca Boxe Adidas", "preco": 29.60},
-    2750: {"nome": "Calça Cós Laser", "preco": 24.90},
-    4239: {"nome": "Tanga Fio Duplo Anelise", "preco": 16.80},
-    4142: {"nome": "Tanga Valdira", "preco": 16.50},
-    4343: {"nome": "Meia Sap Pompom c/3", "preco": 28.20},
-    4122: {"nome": "Calça Fem Mônica", "preco": 103.50},
-    4685: {"nome": "Soutien Francesca", "preco": 52.95},
-    4184: {"nome": "Meia Masc Manhattan Kit", "preco": 25.20},
-    4351: {"nome": "Soutien Soft Ribana", "preco": 54.20},
-    3625: {"nome": "Cueca Boxe Carlos", "preco": 28.50},
-    4597: {"nome": "Cueca Boxe Roger", "preco": 29.00},
-    3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
-    4680: {"nome": "Samba Canção Fernando", "preco": 51.25},
-    4726: {"nome": "Tanga Mapola", "preco": 22.70},
-    4539: {"nome": "Tanga Kamili", "preco": 19.35},
-    4640: {"nome": "Tanga Import Neon", "preco": 18.50},
-    3875: {"nome": "Tanga Nazaré", "preco": 17.50},
-    4705: {"nome": "Tanga Ilma", "preco": 22.70},
+
+clientes = {
+    "Tabata": [
+        {"codigo": 4685, "produto": "Soutien Francesca", "quantidade": 1, "valor": 52.95},
+        {"codigo": 4184, "produto": "Meia Masc Manhattan Kit", "quantidade": 1, "valor": 25.20},
+        {"codigo": 4351, "produto": "Soutien Soft Ribana", "quantidade": 1, "valor": 54.20},
+        {"codigo": 3625, "produto": "Cueca Boxe Carlos", "quantidade": 1, "valor": 28.50},
+        {"codigo": 4597, "produto": "Cueca Boxe Roger", "quantidade": 2, "valor": 29.00},
+        {"codigo": 3900, "produto": "Cueca Boxe Inf Animada", "quantidade": 3, "valor": 15.90},
+        {"codigo": 4680, "produto": "Samba Canção Fernando", "quantidade": 1, "valor": 51.25},
+        {"codigo": 4726, "produto": "Tanga Mapola", "quantidade": 1, "valor": 22.70},
+        {"codigo": 4539, "produto": "Tanga Kamili", "quantidade": 1, "valor": 19.35},
+        {"codigo": 4640, "produto": "Tanga Import Neon", "quantidade": 1, "valor": 18.50},
+        {"codigo": 3875, "produto": "Tanga Nazaré", "quantidade": 1, "valor": 17.50},
+        {"codigo": 4142, "produto": "Tanga Valdira", "quantidade": 1, "valor": 16.50},
+        {"codigo": 4705, "produto": "Tanga Ilma", "quantidade": 1, "valor": 22.70},
+    ],
+    "Valquiria": [
+        {"codigo": 4702, "produto": "Top Sueli032", "quantidade": 1, "valor": 58.40},
+        {"codigo": 4457, "produto": "Conjunto Verena", "quantidade": 1, "valor": 83.80},
+        {"codigo": 4493, "produto": "Meia Fem Analu Kit C/3", "quantidade": 1, "valor": 25.50},
+        {"codigo": 4310, "produto": "Tangao Nani Suede", "quantidade": 1, "valor": 17.30},
+        {"codigo": 4705, "produto": "Tanga Ilma", "quantidade": 2, "valor": 27.70},
+        {"codigo": 3698, "produto": "Tanga Fio Cerejeira", "quantidade": 3, "valor": 14.10},
+        {"codigo": 4494, "produto": "Top Import Coração", "quantidade": 1, "valor": 65.10},
+        {"codigo": 4701, "produto": "Short Doll Brenda", "quantidade": 1, "valor": 71.00},
+    ],
+    "Vanessa": [
+        {"codigo": 4562, "produto": "Short Doll Analis", "quantidade": 1, "valor": 65.10},
+        {"codigo": 4699, "produto": "Tanga Bolívia", "quantidade": 3, "valor": 18.90},
+        {"codigo": 4539, "produto": "Tanga Kamili", "quantidade": 1, "valor": 19.35},
+    ],
+    "Pamela": [
+        {"codigo": 4681, "produto": "Short Doll Inf Alcinha", "quantidade": 1, "valor": 11.20},
+        {"codigo": 4459, "produto": "Meia BB Pelucia Masc", "quantidade": 1, "valor": 19.75},
+        {"codigo": 4497, "produto": "Cueca Boxe Boss", "quantidade": 1, "valor": 27.15},
+        {"codigo": 4673, "produto": "Short Doll Alice Plus", "quantidade": 1, "valor": 83.80},
+    ],
+    "Elan": [
+        {"codigo": 4470, "produto": "Cueca Boxe Adidas", "quantidade": 2, "valor": 29.60},
+    ],
+    "Claudinha": [
+        {"codigo": 2750, "produto": "Calça Cós Laser", "quantidade": 1, "valor": 24.90},
+        {"codigo": 4239, "produto": "Tanga Fio Duplo Anelise", "quantidade": 2, "valor": 16.80},
+        {"codigo": 4142, "produto": "Tanga Valdira", "quantidade": 2, "valor": 16.50},
+        {"codigo": 4343, "produto": "Meia Sap Pompom C/3", "quantidade": 1, "valor": 28.20},
+        {"codigo": 4122, "produto": "Calça Fem Mônica", "quantidade": 1, "valor": 103.50},
+    ],
 }
 
-# Clientes já cadastrados com as vendas (exemplo que você passou)
-clientes_iniciais = {
-    "Tabata": [4685, 4184, 4351, 3625, 4597, 3900, 3900, 3900, 4597, 4680, 4726, 4539, 4640, 3875, 4142, 4705],
-    "Valquiria": [4702, 4457, 4493, 4310, 4705, 4705, 3698, 3698, 3698, 4494, 4701],
-    "Vanessa": [4562, 4699, 4699, 4699, 4539],
-    "Pamela": [4681, 4459, 4497, 4673],
-    "Elan": [4470, 4470],
-    "Claudinha": [2750, 4239, 4239, 4142, 4142, 4343, 4122]
-}
+# =========================
+# Funções utilitárias
+# =========================
 
-# Carrega para o estado da sessão
-if "clientes" not in st.session_state:
-    st.session_state.clientes = clientes_iniciais.copy()
+def calcular_total(cliente):
+    return sum(v["valor"] * v["quantidade"] for v in clientes.get(cliente, []))
 
-st.title("🛍️ Sistema de Vendas")
+def calcular_comissao_total():
+    total_vendas = sum(calcular_total(c) for c in clientes)
+    return total_vendas * 0.40
 
-menu = st.sidebar.radio(
+def gerar_relatorio(tipo, cliente_nome=None):
+    if tipo == "geral":
+        linhas = ["📋 *Relatório Geral de Vendas*\n"]
+        for cliente in clientes:
+            linhas.append(f"👤 {cliente}")
+            for v in clientes[cliente]:
+                subtotal = v["valor"] * v["quantidade"]
+                linhas.append(f"- {v['produto']} ({v['quantidade']}x): R$ {subtotal:.2f}")
+            linhas.append(f"💰 Total do cliente: R$ {calcular_total(cliente):.2f}\n")
+        linhas.append(f"💰 *Comissão total*: R$ {calcular_comissao_total():.2f}")
+        return "\n".join(linhas)
+    elif tipo == "cliente" and cliente_nome:
+        if cliente_nome not in clientes:
+            return "Cliente não encontrado."
+        linhas = [f"📋 *Relatório de {cliente_nome}*\n"]
+        for v in clientes[cliente_nome]:
+            subtotal = v["valor"] * v["quantidade"]
+            linhas.append(f"- {v['produto']} ({v['quantidade']}x): R$ {subtotal:.2f}")
+        linhas.append(f"\n💰 Total do cliente: R$ {calcular_total(cliente_nome):.2f}")
+        return "\n".join(linhas)
+    elif tipo == "comissao":
+        return f"💰 Comissão total: R$ {calcular_comissao_total():.2f}"
+    else:
+        return "Opção inválida."
+
+# =========================
+# Interface Streamlit
+# =========================
+
+st.set_page_config(page_title="Sistema de Vendas", page_icon="📦", layout="wide")
+
+st.title("📦 Sistema de Vendas")
+
+menu = st.sidebar.selectbox(
     "Menu",
-    ["Cadastrar Cliente", "Registrar Venda", "Consultar Cliente", "Relatórios"]
+    ["Cadastrar cliente", "Registrar venda", "Consultar cliente", "Extrato geral", "Comissão total", "Relatórios"]
 )
 
-def registrar_venda(nome, codigo, qtd):
-    if nome not in st.session_state.clientes:
-        st.session_state.clientes[nome] = []
-    st.session_state.clientes[nome].extend([codigo] * qtd)
-
-def gerar_relatorio_geral():
-    rel = "📋 *Relatório Geral de Vendas*\n\n"
-    total = 0
-    for nome, codigos in st.session_state.clientes.items():
-        rel += f"👤 {nome}\n"
-        resumo = {}
-        for c in codigos:
-            if c in produtos:
-                resumo[c] = resumo.get(c, 0) + 1
-        for c, qtd in resumo.items():
-            p = produtos[c]
-            subtotal = p["preco"] * qtd
-            rel += f"  - {p['nome']} ({qtd}x): R$ {subtotal:.2f}\n"
-            total += subtotal
-        rel += "\n"
-    comissao = total * 0.40
-    rel += f"💰 Comissão total: R$ {comissao:.2f}"
-    return rel
-
-def gerar_relatorio_cliente(nome):
-    if nome not in st.session_state.clientes:
-        return f"Cliente {nome} não encontrado."
-    codigos = st.session_state.clientes[nome]
-    rel = f"📋 *Relatório de {nome}*\n\n"
-    total = 0
-    resumo = {}
-    for c in codigos:
-        resumo[c] = resumo.get(c, 0) + 1
-    for c, qtd in resumo.items():
-        if c in produtos:
-            p = produtos[c]
-            subtotal = p["preco"] * qtd
-            rel += f"- {p['nome']} ({qtd}x): R$ {subtotal:.2f}\n"
-            total += subtotal
-    rel += f"\n💰 Total do cliente: R$ {total:.2f}"
-    return rel
-
-# =========================
-# Telas do menu
-# =========================
-if menu == "Cadastrar Cliente":
-    st.subheader("Cadastrar Cliente")
-    nome = st.text_input("Nome do cliente")
+if menu == "Cadastrar cliente":
+    novo_nome = st.text_input("Nome do novo cliente")
     if st.button("Cadastrar"):
-        if nome.strip() == "":
-            st.warning("Digite um nome válido.")
-        elif nome in st.session_state.clientes:
-            st.info("Cliente já cadastrado.")
+        if novo_nome in clientes:
+            st.warning("Cliente já existe!")
         else:
-            st.session_state.clientes[nome] = []
-            st.success(f"Cliente {nome} cadastrado com sucesso!")
+            clientes[novo_nome] = []
+            st.success(f"Cliente {novo_nome} cadastrado com sucesso!")
 
-elif menu == "Registrar Venda":
-    st.subheader("Registrar Venda")
-    if st.session_state.clientes:
-        nome = st.selectbox("Selecione o cliente", list(st.session_state.clientes.keys()))
-        codigo = st.number_input("Código do produto", step=1)
-        qtd = st.number_input("Quantidade", step=1, min_value=1)
-        if st.button("Registrar"):
-            if codigo not in produtos:
-                st.error("Código não cadastrado!")
-            else:
-                registrar_venda(nome, codigo, int(qtd))
-                st.success(f"Venda registrada: {qtd}x {produtos[codigo]['nome']} para {nome}")
-    else:
-        st.warning("Nenhum cliente cadastrado ainda.")
+elif menu == "Registrar venda":
+    cliente = st.selectbox("Selecione o cliente", list(clientes.keys()))
+    codigo = st.text_input("Código do produto")
+    produto = st.text_input("Nome do produto")
+    quantidade = st.number_input("Quantidade", min_value=1, value=1)
+    valor = st.number_input("Valor unitário (R$)", min_value=0.0, format="%.2f")
+    if st.button("Registrar"):
+        clientes[cliente].append({
+            "codigo": codigo,
+            "produto": produto,
+            "quantidade": quantidade,
+            "valor": valor
+        })
+        st.success(f"Venda registrada para {cliente}!")
 
-elif menu == "Consultar Cliente":
-    st.subheader("Consultar Cliente")
-    if st.session_state.clientes:
-        nome = st.selectbox("Selecione o cliente", list(st.session_state.clientes.keys()))
-        if st.button("Ver extrato"):
-            st.text(gerar_relatorio_cliente(nome))
-    else:
-        st.warning("Nenhum cliente cadastrado.")
+elif menu == "Consultar cliente":
+    cliente = st.selectbox("Selecione o cliente", list(clientes.keys()))
+    st.text(gerar_relatorio("cliente", cliente))
+
+elif menu == "Extrato geral":
+    st.text(gerar_relatorio("geral"))
+
+elif menu == "Comissão total":
+    st.text(gerar_relatorio("comissao"))
 
 elif menu == "Relatórios":
-    st.subheader("Relatórios")
-    if st.session_state.clientes:
-        opc = st.radio("Escolha", ["Geral", "De um cliente", "Comissão total"])
-        if opc == "Geral":
-            st.text(gerar_relatorio_geral())
-        elif opc == "De um cliente":
-            nome = st.selectbox("Selecione o cliente", list(st.session_state.clientes.keys()))
-            st.text(gerar_relatorio_cliente(nome))
-        elif opc == "Comissão total":
-            total = 0
-            for codigos in st.session_state.clientes.values():
-                for c in codigos:
-                    if c in produtos:
-                        total += produtos[c]["preco"]
-            comissao = total * 0.40
-            st.text(f"💰 Comissão total: R$ {comissao:.2f}")
+    opc = st.selectbox("Escolha o relatório", ["Geral", "De um cliente", "Comissão total"])
+    if opc == "Geral":
+        st.text(gerar_relatorio("geral"))
+    elif opc == "De um cliente":
+        cliente = st.selectbox("Selecione o cliente", list(clientes.keys()))
+        st.text(gerar_relatorio("cliente", cliente))
     else:
-        st.warning("Nenhum cliente cadastrado.")
+        st.text(gerar_relatorio("comissao"))
