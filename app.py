@@ -23,6 +23,10 @@ def registrar_acesso(label: str):
     except Exception:
         pass
 
+# =============== Controle de acesso ===============
+def is_visitante():
+    return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
+
 # =============== Dados iniciais: Produtos ===============
 PRODUTOS_INICIAIS = {
     3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
@@ -308,27 +312,38 @@ def tela_resumo():
         st.markdown(f"**💸 Comissão (40%):** R$ {(tg*0.40):.2f}")
 
 def tela_registrar_venda():
+    visitante = is_visitante()
     st.header("🛒 Registrar venda")
-    st.session_state.filtro_cliente = st.text_input("Buscar/selecionar cliente (digite ao menos 2 letras):",
-                                                    value=st.session_state.filtro_cliente)
+
+    if visitante:
+        st.warning("🔒 Visitantes não podem registrar vendas. Os campos abaixo estão apenas para visualização.")
+
+    # Busca/seleção de cliente
+    st.session_state.filtro_cliente = st.text_input(
+        "Buscar/selecionar cliente (digite ao menos 2 letras):",
+        value=st.session_state.filtro_cliente,
+        disabled=visitante
+    )
     sugestoes = filtrar_clientes(st.session_state.filtro_cliente)
-    cliente = st.selectbox("Cliente", sugestoes, index=None, placeholder="Digite para buscar") if sugestoes else None
+    cliente = st.selectbox("Cliente", sugestoes, index=None, placeholder="Digite para buscar",
+                           disabled=visitante) if sugestoes else None
 
     st.markdown("---")
     st.subheader("Adicionar item ao carrinho")
     lista_fmt = opcao_produtos_fmt()
-    sel = st.selectbox("Produto", lista_fmt, index=None, placeholder="Digite para buscar por nome ou código")
-    qtd = st.number_input("Quantidade", min_value=1, step=1, value=1)
+    sel = st.selectbox("Produto", lista_fmt, index=None, placeholder="Digite para buscar por nome ou código",
+                       disabled=visitante)
+    qtd = st.number_input("Quantidade", min_value=1, step=1, value=1, disabled=visitante)
     preco_padrao = 0.0
     cod_sel = None
     if sel:
         cod_sel = parse_codigo_from_fmt(sel)
         if cod_sel in st.session_state.produtos:
             preco_padrao = st.session_state.produtos[cod_sel]["preco"]
-    preco_venda = st.number_input("Preço desta venda (pode ajustar)", min_value=0.0, value=float(preco_padrao),
-                                  step=0.10, format="%.2f")
+    preco_venda = st.number_input("Preço desta venda (pode ajustar)", min_value=0.0,
+                                  value=float(preco_padrao), step=0.10, format="%.2f", disabled=visitante)
 
-    if st.button("Adicionar ao carrinho"):
+    if st.button("Adicionar ao carrinho", disabled=visitante):
         if not cliente:
             st.warning("Selecione um cliente.")
         elif not cod_sel:
@@ -354,11 +369,11 @@ def tela_registrar_venda():
         st.markdown(f"**Total do carrinho:** R$ {total_cart:.2f}")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("Limpar carrinho"):
+            if st.button("Limpar carrinho", disabled=visitante):
                 st.session_state.carrinho = []
                 st.rerun()
         with c2:
-            if st.button("Finalizar venda"):
+            if st.button("Finalizar venda", disabled=visitante):
                 if not cliente:
                     st.warning("Selecione um cliente.")
                 elif not st.session_state.carrinho:
@@ -375,8 +390,14 @@ def tela_registrar_venda():
                     st.rerun()
 
 def tela_clientes():
+    visitante = is_visitante()
     st.header("👥 Clientes")
-    aba = st.radio("Ação", ["Consultar cliente", "Cadastrar cliente"], horizontal=True)
+    aba_opcoes = ["Consultar cliente", "Cadastrar cliente"]
+    aba = st.radio("Ação", aba_opcoes, horizontal=True, index=0 if visitante else 0)
+
+    if visitante and aba == "Cadastrar cliente":
+        st.info("🔒 Visitantes não podem cadastrar clientes.")
+        return
 
     if aba == "Cadastrar cliente":
         nome = st.text_input("Nome do cliente").strip()
@@ -389,56 +410,75 @@ def tela_clientes():
                 st.session_state.clientes[nome] = []
                 save_db()
                 st.success("Cliente cadastrado!")
+        return
 
-    else:
-        filtro = st.text_input("Buscar cliente (digite ao menos 2 letras)").strip()
-        matches = filtrar_clientes(filtro)
-        cliente = st.selectbox("Selecione o cliente", matches, index=None) if matches else None
+    # Consultar cliente
+    filtro = st.text_input("Buscar cliente (digite ao menos 2 letras)").strip()
+    matches = filtrar_clientes(filtro)
+    cliente = st.selectbox("Selecione o cliente", matches, index=None) if matches else None
 
-        if cliente:
-            st.markdown(f"### {cliente}")
-            with st.expander("⋯ Ações do cliente"):
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    novo_nome = st.text_input("Renomear cliente", value=cliente, key=f"rn_{cliente}")
+    if cliente:
+        st.markdown(f"### {cliente}")
+        with st.expander("⋯ Ações do cliente", expanded=not visitante):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                novo_nome = st.text_input("Renomear cliente", value=cliente, key=f"rn_{cliente}",
+                                          disabled=visitante)
+                if not visitante:
                     if st.button("Salvar novo nome", key=f"btn_rn_{cliente}"):
                         renomear_cliente(cliente, novo_nome)
-                with col_b:
+                else:
+                    st.caption("🔒 Disponível apenas para usuários logados.")
+            with col_b:
+                if not visitante:
                     if st.button("Apagar cliente", key=f"delcli_{cliente}"):
                         apagar_cliente(cliente)
+                else:
+                    st.button("Apagar cliente", key=f"delcli_{cliente}", disabled=True)
 
-            vendas = st.session_state.clientes.get(cliente, [])
-            if not vendas:
-                st.info("Sem vendas para este cliente.")
-            else:
-                total = 0.0
-                for idx, v in enumerate(vendas):
-                    cod = v["codigo"]
-                    nomep = st.session_state.produtos.get(cod, {}).get("nome", f"Cód {cod}")
-                    preco = float(v.get("preco", st.session_state.produtos.get(cod, {}).get("preco", 0.0)))
-                    qtd = int(v.get("quantidade", 1))
-                    subtotal = preco * qtd
-                    total += subtotal
+        vendas = st.session_state.clientes.get(cliente, [])
+        if not vendas:
+            st.info("Sem vendas para este cliente.")
+        else:
+            total = 0.0
+            for idx, v in enumerate(vendas):
+                cod = v["codigo"]
+                nomep = st.session_state.produtos.get(cod, {}).get("nome", f"Cód {cod}")
+                preco = float(v.get("preco", st.session_state.produtos.get(cod, {}).get("preco", 0.0)))
+                qtd = int(v.get("quantidade", 1))
+                subtotal = preco * qtd
+                total += subtotal
 
-                    with st.expander(f"{nomep} ({qtd}x) - R$ {preco:.2f} | Subtotal: R$ {subtotal:.2f}"):
-                        nova_qtd = st.number_input("Quantidade", min_value=1, step=1, value=qtd, key=f"q_{cliente}_{idx}")
-                        novo_preco = st.number_input("Preço (desta venda)", min_value=0.0, step=0.10, value=preco,
-                                                     format="%.2f", key=f"p_{cliente}_{idx}")
-                        col1, col2 = st.columns(2)
-                        with col1:
+                with st.expander(f"{nomep} ({qtd}x) - R$ {preco:.2f} | Subtotal: R$ {subtotal:.2f}"):
+                    nova_qtd = st.number_input("Quantidade", min_value=1, step=1, value=qtd,
+                                               key=f"q_{cliente}_{idx}", disabled=visitante)
+                    novo_preco = st.number_input("Preço (desta venda)", min_value=0.0, step=0.10, value=preco,
+                                                 format="%.2f", key=f"p_{cliente}_{idx}", disabled=visitante)
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if not visitante:
                             if st.button("Salvar edição", key=f"save_{cliente}_{idx}"):
                                 editar_venda(cliente, idx, nova_qtd, novo_preco)
-                        with col2:
+                        else:
+                            st.button("Salvar edição", key=f"save_{cliente}_{idx}", disabled=True)
+                    with col2:
+                        if not visitante:
                             if st.button("Apagar venda", key=f"del_{cliente}_{idx}"):
                                 remover_venda(cliente, idx)
+                        else:
+                            st.button("Apagar venda", key=f"del_{cliente}_{idx}", disabled=True)
 
-                st.markdown(f"**Total do cliente:** R$ {total:.2f}")
+            st.markdown(f"**Total do cliente:** R$ {total:.2f}")
 
 def tela_produtos():
+    visitante = is_visitante()
     st.header("📦 Produtos")
-    sub = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True)
+    sub = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True, index=0)
 
     if sub == "Adicionar":
+        if visitante:
+            st.info("🔒 Visitantes não podem adicionar produtos.")
+            return
         col1, col2 = st.columns([1,2])
         with col1:
             cod = st.number_input("Código", min_value=1, step=1)
@@ -468,21 +508,28 @@ def tela_produtos():
 
         for cod, nome, preco, texto in sorted(itens, key=lambda x: x[1].lower()):
             with st.expander(texto):
-                novo_nome = st.text_input("Nome", value=nome, key=f"pn_{cod}")
-                novo_preco = st.number_input("Preço", value=float(preco), step=0.10, format="%.2f", key=f"pp_{cod}")
+                novo_nome = st.text_input("Nome", value=nome, key=f"pn_{cod}", disabled=visitante)
+                novo_preco = st.number_input("Preço", value=float(preco), step=0.10, format="%.2f",
+                                             key=f"pp_{cod}", disabled=visitante)
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("Salvar", key=f"s_{cod}"):
-                        st.session_state.produtos[cod]["nome"] = novo_nome
-                        st.session_state.produtos[cod]["preco"] = float(novo_preco)
-                        save_db()
-                        st.success("Produto atualizado.")
+                    if visitante:
+                        st.button("Salvar", key=f"s_{cod}", disabled=True)
+                    else:
+                        if st.button("Salvar", key=f"s_{cod}"):
+                            st.session_state.produtos[cod]["nome"] = novo_nome
+                            st.session_state.produtos[cod]["preco"] = float(novo_preco)
+                            save_db()
+                            st.success("Produto atualizado.")
                 with c2:
-                    if st.button("Apagar", key=f"d_{cod}"):
-                        st.session_state.produtos.pop(cod, None)
-                        save_db()
-                        st.success("Produto apagado.")
-                        st.rerun()
+                    if visitante:
+                        st.button("Apagar", key=f"d_{cod}", disabled=True)
+                    else:
+                        if st.button("Apagar", key=f"d_{cod}"):
+                            st.session_state.produtos.pop(cod, None)
+                            save_db()
+                            st.success("Produto apagado.")
+                            st.rerun()
 
 def tela_relatorios():
     st.header("📈 Relatórios")
@@ -512,6 +559,17 @@ def tela_relatorios():
         st.code(texto)
         st.download_button("Baixar .txt", data=texto, file_name="relatorio_comissao.txt")
 
+def tela_acessos():
+    st.header("📜 Histórico de acessos")
+    if not os.path.exists(LOG_FILE):
+        st.info("Nenhum acesso registrado ainda.")
+        return
+    with open(LOG_FILE, "r", encoding="utf-8") as f:
+        linhas = f.readlines()
+    st.caption("Mostrando os acessos mais recentes (últimos 200):")
+    for linha in reversed(linhas[-200:]):
+        st.text(linha.strip())
+
 # =============== Layout principal ===============
 def bloco_backup_sidebar():
     st.sidebar.markdown("---")
@@ -522,27 +580,32 @@ def bloco_backup_sidebar():
     }, ensure_ascii=False, indent=2)
     st.sidebar.download_button("⬇️ Exportar backup (.json)", data=db_json.encode("utf-8"),
                                file_name="backup_sistema_vendas.json")
-    up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
-    if up is not None:
-        try:
-            data = json.load(up)
-            prods = {int(k): v for k, v in data.get("produtos", {}).items()}
-            clis  = {k: v for k, v in data.get("clientes", {}).items()}
-            st.session_state.produtos = prods
-            st.session_state.clientes = clis
-            save_db()
-            st.sidebar.success("Backup restaurado!")
-            st.rerun()
-        except Exception as e:
-            st.sidebar.error(f"Falha ao restaurar: {e}")
+    # Restaurar backup: apenas para usuários logados
+    if not is_visitante():
+        up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
+        if up is not None:
+            try:
+                data = json.load(up)
+                prods = {int(k): v for k, v in data.get("produtos", {}).items()}
+                clis  = {k: v for k, v in data.get("clientes", {}).items()}
+                st.session_state.produtos = prods
+                st.session_state.clientes = clis
+                save_db()
+                st.sidebar.success("Backup restaurado!")
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Falha ao restaurar: {e}")
+    else:
+        st.sidebar.caption("🔒 Restauração disponível apenas para usuários logados.")
 
 def barra_lateral():
     st.sidebar.markdown(f"**Usuário:** {st.session_state.usuario}")
-    menu = st.sidebar.radio(
-        "Menu",
-        ["Resumo", "Registrar venda", "Clientes", "Produtos", "Relatórios", "Sair"],
-        index=["Resumo", "Registrar venda", "Clientes", "Produtos", "Relatórios", "Sair"].index(st.session_state.menu)
-    )
+    opcoes = ["Resumo", "Registrar venda", "Clientes", "Produtos", "Relatórios", "Sair"]
+    if not is_visitante():
+        opcoes.insert(-1, "Acessos")  # adiciona antes do "Sair"
+    # Ajusta índice caso a opção anterior não exista (ex.: visitante não tem "Acessos")
+    idx_atual = opcoes.index(st.session_state.menu) if st.session_state.menu in opcoes else 0
+    menu = st.sidebar.radio("Menu", opcoes, index=idx_atual)
     st.session_state.menu = menu
     bloco_backup_sidebar()
 
@@ -557,6 +620,12 @@ def roteador():
         tela_produtos()
     elif st.session_state.menu == "Relatórios":
         tela_relatorios()
+    elif st.session_state.menu == "Acessos":
+        # segurança extra: só mostra se não for visitante
+        if not is_visitante():
+            tela_acessos()
+        else:
+            st.error("Acesso negado.")
     elif st.session_state.menu == "Sair":
         st.session_state.clear()
         st.rerun()
