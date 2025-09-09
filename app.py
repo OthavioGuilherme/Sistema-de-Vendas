@@ -1,10 +1,11 @@
-# sistema_vendas.py
+# app.py
 import streamlit as st
 from datetime import datetime
 import json
 import os
+import io
 
-# =============== Configuração da página ===============
+# =============== Config página ===============
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
 # =============== Autenticação ===============
@@ -13,29 +14,20 @@ USERS = {
     "isabela": "122008",
 }
 LOG_FILE = "acessos.log"
-DB_FILE = "db.json"
+DB_FILE  = "db.json"
 
-def registrar_acesso(usuario):
+def registrar_acesso(label: str):
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat()} - {usuario}\n")
+            f.write(f"{datetime.now().isoformat()} - {label}\n")
     except Exception:
         pass
 
-def autenticar(usuario, senha):
-    if USERS.get(usuario) == senha:
-        st.session_state.logado = True
-        st.session_state.usuario = usuario
-        registrar_acesso(usuario)
-        return True
-    return False
-
-# =============== Helpers ===============
+# =============== Controle de acesso ===============
 def is_visitante():
-    """Verifica se o usuário atual é visitante."""
     return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
 
-# =============== Dados iniciais ===============
+# =============== Dados iniciais: Produtos ===============
 PRODUTOS_INICIAIS = {
     3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
     4416: {"nome": "Calcinha Inf Canelada", "preco": 13.00},
@@ -84,6 +76,7 @@ PRODUTOS_INICIAIS = {
     4460: {"nome": "Meia Masc Saulo Kit C/3", "preco": 31.50},
 }
 
+# =============== Vendas iniciais (preço da VENDA) ===============
 VENDAS_INICIAIS = {
     "Tabata": [
         {"codigo": 4685, "quantidade": 1, "preco": 52.95},
@@ -91,7 +84,10 @@ VENDAS_INICIAIS = {
         {"codigo": 4351, "quantidade": 1, "preco": 54.20},
         {"codigo": 3625, "quantidade": 1, "preco": 28.50},
         {"codigo": 4597, "quantidade": 1, "preco": 29.00},
-        {"codigo": 3900, "quantidade": 3, "preco": 15.90},
+        {"codigo": 3900, "quantidade": 1, "preco": 15.90},
+        {"codigo": 3900, "quantidade": 1, "preco": 15.90},
+        {"codigo": 3900, "quantidade": 1, "preco": 15.90},
+        {"codigo": 4597, "quantidade": 1, "preco": 29.00},
         {"codigo": 4680, "quantidade": 1, "preco": 51.25},
         {"codigo": 4726, "quantidade": 1, "preco": 22.70},
         {"codigo": 4539, "quantidade": 1, "preco": 19.35},
@@ -105,24 +101,30 @@ VENDAS_INICIAIS = {
         {"codigo": 4457, "quantidade": 1, "preco": 83.80},
         {"codigo": 4493, "quantidade": 1, "preco": 25.50},
         {"codigo": 4310, "quantidade": 1, "preco": 17.30},
-        {"codigo": 4705, "quantidade": 2, "preco": 27.70},
-        {"codigo": 3698, "quantidade": 3, "preco": 14.10},
+        {"codigo": 4705, "quantidade": 1, "preco": 27.70},
+        {"codigo": 4705, "quantidade": 1, "preco": 27.70},
+        {"codigo": 3698, "quantidade": 1, "preco": 14.10},
+        {"codigo": 3698, "quantidade": 1, "preco": 14.10},
+        {"codigo": 3698, "quantidade": 1, "preco": 14.10},
         {"codigo": 4494, "quantidade": 1, "preco": 65.10},
         {"codigo": 4701, "quantidade": 1, "preco": 71.00},
     ],
     "Vanessa": [
         {"codigo": 4562, "quantidade": 1, "preco": 65.10},
-        {"codigo": 4699, "quantidade": 3, "preco": 18.90},
+        {"codigo": 4699, "quantidade": 1, "preco": 18.90},
+        {"codigo": 4699, "quantidade": 1, "preco": 18.90},
+        {"codigo": 4699, "quantidade": 1, "preco": 18.90},
         {"codigo": 4539, "quantidade": 1, "preco": 19.35},
     ],
     "Pamela": [
-        {"codigo": 4681, "quantidade": 1, "preco": 11.20},
+        {"codigo": 4681, "quantidade": 1, "preco": 11.20},  # override do preço
         {"codigo": 4459, "quantidade": 1, "preco": 19.75},
         {"codigo": 4497, "quantidade": 1, "preco": 27.15},
         {"codigo": 4673, "quantidade": 1, "preco": 83.80},
     ],
     "Elan": [
-        {"codigo": 4470, "quantidade": 2, "preco": 29.60},
+        {"codigo": 4470, "quantidade": 1, "preco": 29.60},
+        {"codigo": 4470, "quantidade": 1, "preco": 29.60},
     ],
     "Claudinha": [
         {"codigo": 2750, "quantidade": 1, "preco": 24.90},
@@ -133,7 +135,7 @@ VENDAS_INICIAIS = {
     ],
 }
 
-# =============== Persistência ===============
+# =============== Persistência (JSON) ===============
 def save_db():
     try:
         data = {
@@ -150,15 +152,17 @@ def load_db():
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            # produtos (chaves podem vir como string)
             prods = {int(k): v for k, v in data.get("produtos", {}).items()}
-            clis = {k: v for k, v in data.get("clientes", {}).items()}
+            clis  = {k: v for k, v in data.get("clientes", {}).items()}
             return prods, clis
-        except:
+        except Exception:
             pass
+    # caso não exista/erro, retorna iniciais
     return ({k: v.copy() for k, v in PRODUTOS_INICIAIS.items()},
             {k: [i.copy() for i in lst] for k, lst in VENDAS_INICIAIS.items()})
 
-# =============== Session State ===============
+# =============== Session state ===============
 if "logado" not in st.session_state:
     st.session_state.logado = False
 if "usuario" not in st.session_state:
@@ -174,95 +178,400 @@ if "filtro_cliente" not in st.session_state:
 if "menu" not in st.session_state:
     st.session_state.menu = "Resumo"
 
-# ===================================================
-# =================== Helpers ===================
-def total_cliente(nome):
+# =============== Helpers ===============
+def total_cliente(nome: str) -> float:
     vendas = st.session_state.clientes.get(nome, [])
-    return sum(item["preco"] * item["quantidade"] for item in vendas)
+    return sum(v["preco"] * v["quantidade"] for v in vendas)
 
-def total_geral():
-    return sum(total_cliente(c) for c in st.session_state.clientes)
+def total_geral() -> float:
+    return sum(total_cliente(c) for c in st.session_state.clientes.keys())
 
-def listar_produtos():
-    return [(codigo, info["nome"], info["preco"]) for codigo, info in st.session_state.produtos.items()]
+def wh_ts_geral() -> str:
+    linhas = ["📋 *Relatório Geral de Vendas*", ""]
+    for c in sorted(st.session_state.clientes.keys(), key=lambda x: x.lower()):
+        linhas.append(f"- {c}: R$ {total_cliente(c):.2f}")
+    linhas += ["", f"💰 *Total geral*: R$ {total_geral():.2f}",
+               f"💸 *Comissão (40%)*: R$ {(total_geral()*0.40):.2f}"]
+    return "\n".join(linhas)
 
-# =================== Telas ===================
+def wh_ts_individual(nome: str) -> str:
+    vendas = st.session_state.clientes.get(nome, [])
+    linhas = [f"📋 *Relatório de {nome}*", ""]
+    if not vendas:
+        linhas.append("_Sem vendas._")
+    else:
+        agrup = {}
+        for v in vendas:
+            cod = v["codigo"]; preco = v["preco"]
+            chave = (cod, preco)
+            agrup.setdefault(chave, 0)
+            agrup[chave] += v["quantidade"]
+        for (cod, preco), qtd in sorted(
+            agrup.items(),
+            key=lambda x: st.session_state.produtos.get(x[0][0], {}).get("nome", f"Cód {x[0][0]}").lower()
+        ):
+            nomep = st.session_state.produtos.get(cod, {}).get("nome", f"Cód {cod}")
+            linhas.append(f"- {nomep} ({qtd}x): R$ {(preco*qtd):.2f}")
+        linhas += ["", f"💰 *Total do cliente*: R$ {total_cliente(nome):.2f}"]
+    return "\n".join(linhas)
+
+def wh_ts_comissao() -> str:
+    tg = total_geral()
+    return f"💸 *Comissão total (40%)*: R$ {(tg*0.40):.2f}"
+
+def opcao_produtos_fmt():
+    items = []
+    for cod, dados in st.session_state.produtos.items():
+        items.append(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
+    return sorted(items, key=lambda s: s.split(" - ",1)[1].lower())
+
+def parse_codigo_from_fmt(s: str):
+    try:
+        return int(s.split(" - ",1)[0].strip())
+    except:
+        return None
+
+def filtrar_clientes(filtro: str):
+    if not filtro or len(filtro.strip()) < 2:
+        return []
+    f = filtro.strip().lower()
+    return sorted([c for c in st.session_state.clientes if f in c.lower()], key=lambda x: x.lower())
+
+def remover_venda(nome, idx):
+    try:
+        st.session_state.clientes[nome].pop(idx)
+        save_db()
+        st.success("Venda removida.")
+        st.rerun()
+    except:
+        st.error("Não foi possível remover.")
+
+def editar_venda(nome, idx, nova_qtd, novo_preco):
+    try:
+        st.session_state.clientes[nome][idx]["quantidade"] = int(nova_qtd)
+        st.session_state.clientes[nome][idx]["preco"] = float(novo_preco)
+        save_db()
+        st.success("Venda atualizada.")
+        st.rerun()
+    except:
+        st.error("Não foi possível editar.")
+
+def renomear_cliente(nome_antigo, nome_novo):
+    if not nome_novo.strip():
+        st.warning("Informe um nome válido.")
+        return
+    if nome_novo in st.session_state.clientes and nome_novo != nome_antigo:
+        st.warning("Já existe cliente com esse nome.")
+        return
+    st.session_state.clientes[nome_novo] = st.session_state.clientes.pop(nome_antigo)
+    save_db()
+    st.success("Cliente renomeado.")
+    st.rerun()
+
+def apagar_cliente(nome):
+    st.session_state.clientes.pop(nome, None)
+    save_db()
+    st.success("Cliente apagado.")
+    st.rerun()
+
+# =============== Telas ===============
 def tela_login():
-    st.title("🧾 Sistema de Vendas - Login")
-    usuario = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
-        if autenticar(usuario, senha):
-            st.success(f"Bem-vindo(a), {usuario}!")
-        else:
-            st.error("Usuário ou senha inválidos.")
+    st.title("🔐 Login")
+    escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
+    if escolha == "Usuário cadastrado":
+        user = st.text_input("Usuário").strip().lower()
+        senha = st.text_input("Senha", type="password").strip()
+        if st.button("Entrar"):
+            if user in USERS and USERS[user].lower() == senha.lower():
+                st.session_state.logado = True
+                st.session_state.usuario = user
+                registrar_acesso(f"login-usuario: {user}")
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
+    else:
+        nome = st.text_input("Digite seu nome para entrar como visitante").strip()
+        if st.button("Entrar como visitante"):
+            if nome:
+                st.session_state.logado = True
+                st.session_state.usuario = f"visitante-{nome}"
+                registrar_acesso(f"login-visitante: {nome}")
+                st.rerun()
+            else:
+                st.warning("Por favor, digite um nome.")
 
 def tela_resumo():
-    st.header("Resumo de Vendas")
-    st.write(f"**Total Geral:** R$ {total_geral():.2f}")
-    for cliente in st.session_state.clientes:
-        st.write(f"- {cliente}: R$ {total_cliente(cliente):.2f}")
+    st.title("📦 Sistema de Vendas")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Resumo Geral de Vendas")
+        tg = total_geral()
+        st.markdown(f"**💰 Total geral:** R$ {tg:.2f}")
+    with col2:
+        st.subheader("Comissão")
+        st.markdown(f"**💸 Comissão (40%):** R$ {(tg*0.40):.2f}")
 
 def tela_registrar_venda():
-    st.header("Registrar Nova Venda")
-    if is_visitante():
-        st.warning("Visitantes não podem registrar vendas.")
-        return
-    cliente = st.text_input("Nome do Cliente")
-    codigo = st.number_input("Código do Produto", min_value=0)
-    quantidade = st.number_input("Quantidade", min_value=1, value=1)
-    if st.button("Adicionar Venda"):
-        produto = st.session_state.produtos.get(codigo)
-        if not produto:
-            st.error("Produto não encontrado.")
-            return
-        venda = {"codigo": codigo, "quantidade": quantidade, "preco": produto["preco"]}
-        st.session_state.clientes.setdefault(cliente, []).append(venda)
-        save_db()
-        st.success(f"Venda registrada para {cliente}.")
+    visitante = is_visitante()
+    st.header("🛒 Registrar venda")
+
+    if visitante:
+        st.warning("🔒 Visitantes não podem registrar vendas. Os campos abaixo estão apenas para visualização.")
+
+    # Busca/seleção de cliente
+    st.session_state.filtro_cliente = st.text_input(
+        "Buscar/selecionar cliente (digite ao menos 2 letras):",
+        value=st.session_state.filtro_cliente,
+        disabled=visitante
+    )
+    sugestoes = filtrar_clientes(st.session_state.filtro_cliente)
+    cliente = st.selectbox("Cliente", sugestoes, index=None, placeholder="Digite para buscar",
+                           disabled=visitante) if sugestoes else None
+
+    st.markdown("---")
+    st.subheader("Adicionar item ao carrinho")
+    lista_fmt = opcao_produtos_fmt()
+    sel = st.selectbox("Produto", lista_fmt, index=None, placeholder="Digite para buscar por nome ou código",
+                       disabled=visitante)
+    qtd = st.number_input("Quantidade", min_value=1, step=1, value=1, disabled=visitante)
+    preco_padrao = 0.0
+    cod_sel = None
+    if sel:
+        cod_sel = parse_codigo_from_fmt(sel)
+        if cod_sel in st.session_state.produtos:
+            preco_padrao = st.session_state.produtos[cod_sel]["preco"]
+    preco_venda = st.number_input("Preço desta venda (pode ajustar)", min_value=0.0,
+                                  value=float(preco_padrao), step=0.10, format="%.2f", disabled=visitante)
+
+    if st.button("Adicionar ao carrinho", disabled=visitante):
+        if not cliente:
+            st.warning("Selecione um cliente.")
+        elif not cod_sel:
+            st.warning("Selecione um produto.")
+        else:
+            nomep = st.session_state.produtos[cod_sel]["nome"]
+            st.session_state.carrinho.append({
+                "codigo": cod_sel,
+                "nome": nomep,
+                "quantidade": int(qtd),
+                "preco": float(preco_venda),
+            })
+            st.success(f"Adicionado: {nomep} ({qtd}x)")
+
+    st.markdown("### Carrinho")
+    if not st.session_state.carrinho:
+        st.info("Carrinho vazio.")
+    else:
+        total_cart = 0.0
+        for i, item in enumerate(st.session_state.carrinho):
+            st.write(f"**{i+1}.** {item['nome']} ({item['quantidade']}x) - R$ {item['preco']:.2f} cada")
+            total_cart += item["quantidade"] * item["preco"]
+        st.markdown(f"**Total do carrinho:** R$ {total_cart:.2f}")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Limpar carrinho", disabled=visitante):
+                st.session_state.carrinho = []
+                st.rerun()
+        with c2:
+            if st.button("Finalizar venda", disabled=visitante):
+                if not cliente:
+                    st.warning("Selecione um cliente.")
+                elif not st.session_state.carrinho:
+                    st.warning("Carrinho vazio.")
+                else:
+                    st.session_state.clientes.setdefault(cliente, [])
+                    st.session_state.clientes[cliente].extend(
+                        [{"codigo": it["codigo"], "quantidade": it["quantidade"], "preco": it["preco"]}
+                         for it in st.session_state.carrinho]
+                    )
+                    st.session_state.carrinho = []
+                    save_db()
+                    st.success("Venda registrada!")
+                    st.rerun()
 
 def tela_clientes():
-    st.header("Clientes")
-    for cliente, vendas in st.session_state.clientes.items():
-        st.subheader(cliente)
-        for v in vendas:
-            prod = st.session_state.produtos.get(v["codigo"], {"nome":"Desconhecido"})
-            st.write(f'{prod["nome"]} | Qtde: {v["quantidade"]} | R$ {v["preco"]:.2f}')
+    visitante = is_visitante()
+    st.header("👥 Clientes")
+    aba_opcoes = ["Consultar cliente", "Cadastrar cliente"]
+    aba = st.radio("Ação", aba_opcoes, horizontal=True, index=0 if visitante else 0)
+
+    if visitante and aba == "Cadastrar cliente":
+        st.info("🔒 Visitantes não podem cadastrar clientes.")
+        return
+
+    if aba == "Cadastrar cliente":
+        nome = st.text_input("Nome do cliente").strip()
+        if st.button("Salvar cliente"):
+            if not nome:
+                st.warning("Informe um nome.")
+            elif nome in st.session_state.clientes:
+                st.warning("Já existe cliente com esse nome.")
+            else:
+                st.session_state.clientes[nome] = []
+                save_db()
+                st.success("Cliente cadastrado!")
+        return
+
+    # Consultar cliente
+    filtro = st.text_input("Buscar cliente (digite ao menos 2 letras)").strip()
+    matches = filtrar_clientes(filtro)
+    cliente = st.selectbox("Selecione o cliente", matches, index=None) if matches else None
+
+    if cliente:
+        st.markdown(f"### {cliente}")
+        with st.expander("⋯ Ações do cliente", expanded=not visitante):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                novo_nome = st.text_input("Renomear cliente", value=cliente, key=f"rn_{cliente}",
+                                          disabled=visitante)
+                if not visitante:
+                    if st.button("Salvar novo nome", key=f"btn_rn_{cliente}"):
+                        renomear_cliente(cliente, novo_nome)
+                else:
+                    st.caption("🔒 Disponível apenas para usuários logados.")
+            with col_b:
+                if not visitante:
+                    if st.button("Apagar cliente", key=f"delcli_{cliente}"):
+                        apagar_cliente(cliente)
+                else:
+                    st.button("Apagar cliente", key=f"delcli_{cliente}", disabled=True)
+
+        vendas = st.session_state.clientes.get(cliente, [])
+        if not vendas:
+            st.info("Sem vendas para este cliente.")
+        else:
+            total = 0.0
+            for idx, v in enumerate(vendas):
+                cod = v["codigo"]
+                nomep = st.session_state.produtos.get(cod, {}).get("nome", f"Cód {cod}")
+                preco = float(v.get("preco", st.session_state.produtos.get(cod, {}).get("preco", 0.0)))
+                qtd = int(v.get("quantidade", 1))
+                subtotal = preco * qtd
+                total += subtotal
+
+                with st.expander(f"{nomep} ({qtd}x) - R$ {preco:.2f} | Subtotal: R$ {subtotal:.2f}"):
+                    nova_qtd = st.number_input("Quantidade", min_value=1, step=1, value=qtd,
+                                               key=f"q_{cliente}_{idx}", disabled=visitante)
+                    novo_preco = st.number_input("Preço (desta venda)", min_value=0.0, step=0.10, value=preco,
+                                                 format="%.2f", key=f"p_{cliente}_{idx}", disabled=visitante)
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if not visitante:
+                            if st.button("Salvar edição", key=f"save_{cliente}_{idx}"):
+                                editar_venda(cliente, idx, nova_qtd, novo_preco)
+                        else:
+                            st.button("Salvar edição", key=f"save_{cliente}_{idx}", disabled=True)
+                    with col2:
+                        if not visitante:
+                            if st.button("Apagar venda", key=f"del_{cliente}_{idx}"):
+                                remover_venda(cliente, idx)
+                        else:
+                            st.button("Apagar venda", key=f"del_{cliente}_{idx}", disabled=True)
+
+            st.markdown(f"**Total do cliente:** R$ {total:.2f}")
 
 def tela_produtos():
-    st.header("Produtos")
-    for codigo, info in st.session_state.produtos.items():
-        st.write(f'{codigo} - {info["nome"]} - R$ {info["preco"]:.2f}')
+    visitante = is_visitante()
+    st.header("📦 Produtos")
+    sub = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True, index=0)
+
+    if sub == "Adicionar":
+        if visitante:
+            st.info("🔒 Visitantes não podem adicionar produtos.")
+            return
+        col1, col2 = st.columns([1,2])
+        with col1:
+            cod = st.number_input("Código", min_value=1, step=1)
+        with col2:
+            nomep = st.text_input("Nome do produto")
+        preco = st.number_input("Preço", min_value=0.0, step=0.10, format="%.2f")
+
+        if st.button("Salvar produto"):
+            cod = int(cod)
+            if cod in st.session_state.produtos:
+                st.warning("Já existe produto com esse código.")
+            elif not nomep.strip():
+                st.warning("Informe um nome válido.")
+            else:
+                st.session_state.produtos[cod] = {"nome": nomep.strip(), "preco": float(preco)}
+                save_db()
+                st.success("Produto cadastrado!")
+
+    else:
+        termo = st.text_input("Buscar por nome ou código").strip().lower()
+        itens = []
+        for cod, dados in st.session_state.produtos.items():
+            nome = dados["nome"]; preco = dados["preco"]
+            texto = f"{cod} - {nome} (R$ {preco:.2f})"
+            if not termo or (termo in nome.lower() or termo in str(cod)):
+                itens.append((cod, nome, preco, texto))
+
+        for cod, nome, preco, texto in sorted(itens, key=lambda x: x[1].lower()):
+            with st.expander(texto):
+                novo_nome = st.text_input("Nome", value=nome, key=f"pn_{cod}", disabled=visitante)
+                novo_preco = st.number_input("Preço", value=float(preco), step=0.10, format="%.2f",
+                                             key=f"pp_{cod}", disabled=visitante)
+                c1, c2 = st.columns(2)
+                with c1:
+                    if visitante:
+                        st.button("Salvar", key=f"s_{cod}", disabled=True)
+                    else:
+                        if st.button("Salvar", key=f"s_{cod}"):
+                            st.session_state.produtos[cod]["nome"] = novo_nome
+                            st.session_state.produtos[cod]["preco"] = float(novo_preco)
+                            save_db()
+                            st.success("Produto atualizado.")
+                with c2:
+                    if visitante:
+                        st.button("Apagar", key=f"d_{cod}", disabled=True)
+                    else:
+                        if st.button("Apagar", key=f"d_{cod}"):
+                            st.session_state.produtos.pop(cod, None)
+                            save_db()
+                            st.success("Produto apagado.")
+                            st.rerun()
 
 def tela_relatorios():
-    st.header("Relatórios")
-    st.write("**Relatório de vendas por cliente:**")
-    for cliente in st.session_state.clientes:
-        st.write(f"- {cliente}: R$ {total_cliente(cliente):.2f}")
-    st.write(f"**Total geral:** R$ {total_geral():.2f}")
+    st.header("📈 Relatórios")
+    escolha = st.radio("Escolha um relatório", ["Geral", "Individual", "Comissão total"], horizontal=True)
+
+    if escolha == "Geral":
+        texto = wh_ts_geral()
+        st.subheader("Prévia")
+        st.code(texto)
+        st.download_button("Baixar .txt", data=texto, file_name="relatorio_geral.txt")
+
+    elif escolha == "Individual":
+        filtro = st.text_input("Buscar cliente (2+ letras)").strip()
+        matches = filtrar_clientes(filtro)
+        cliente = st.selectbox("Cliente", matches, index=None) if matches else None
+        if cliente:
+            texto = wh_ts_individual(cliente)
+            st.subheader("Prévia")
+            st.code(texto)
+            st.download_button("Baixar .txt", data=texto, file_name=f"relatorio_{cliente}.txt")
+        else:
+            st.info("Digite ao menos 2 letras para buscar.")
+
+    else:
+        texto = wh_ts_comissao()
+        st.subheader("Prévia")
+        st.code(texto)
+        st.download_button("Baixar .txt", data=texto, file_name="relatorio_comissao.txt")
 
 def tela_acessos():
-    st.header("Histórico de Acessos")
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "r", encoding="utf-8") as f:
-            logs = f.read()
-        st.text(logs)
+    st.header("📜 Histórico de acessos")
+    if not os.path.exists(LOG_FILE):
+        st.info("Nenhum acesso registrado ainda.")
+        return
+    with open(LOG_FILE, "r", encoding="utf-8") as f:
+        linhas = f.readlines()
+    st.caption("Mostrando os acessos mais recentes (últimos 200):")
+    for linha in reversed(linhas[-200:]):
+        st.text(linha.strip())
 
-# =================== Barra Lateral ===================
-# =============== Barra Lateral Modernizada ===============
-def barra_lateral():
-    st.sidebar.markdown(f"<h3 style='color:#4B0082;'>Usuário: {st.session_state.usuario}</h3>", unsafe_allow_html=True)
-    st.sidebar.markdown("---")
-    
-    opcoes = ["Resumo", "Registrar venda", "Clientes", "Produtos", "Relatórios", "Sair"]
-    if not is_visitante():
-        opcoes.insert(-1, "Acessos")  # adiciona antes do "Sair" somente para usuários logados
-
-    idx_atual = opcoes.index(st.session_state.menu) if st.session_state.menu in opcoes else 0
-    menu = st.sidebar.radio("Menu", opcoes, index=idx_atual, key="menu_lateral")
-    st.session_state.menu = menu
-
-    # =============== Backup na sidebar ===============
+# =============== Layout principal ===============
+def bloco_backup_sidebar():
     st.sidebar.markdown("---")
     st.sidebar.subheader("🧰 Backup")
     db_json = json.dumps({
@@ -271,7 +580,7 @@ def barra_lateral():
     }, ensure_ascii=False, indent=2)
     st.sidebar.download_button("⬇️ Exportar backup (.json)", data=db_json.encode("utf-8"),
                                file_name="backup_sistema_vendas.json")
-    
+    # Restaurar backup: apenas para usuários logados
     if not is_visitante():
         up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
         if up is not None:
@@ -287,46 +596,39 @@ def barra_lateral():
             except Exception as e:
                 st.sidebar.error(f"Falha ao restaurar: {e}")
     else:
-        st.sidebar.caption("🔒 Visitantes não podem restaurar backup.")
+        st.sidebar.caption("🔒 Restauração disponível apenas para usuários logados.")
 
+def barra_lateral():
+    st.sidebar.markdown(f"**Usuário:** {st.session_state.usuario}")
+    opcoes = ["Resumo", "Registrar venda", "Clientes", "Produtos", "Relatórios", "Sair"]
+    if not is_visitante():
+        opcoes.insert(-1, "Acessos")  # adiciona antes do "Sair"
+    # Ajusta índice caso a opção anterior não exista (ex.: visitante não tem "Acessos")
+    idx_atual = opcoes.index(st.session_state.menu) if st.session_state.menu in opcoes else 0
+    menu = st.sidebar.radio("Menu", opcoes, index=idx_atual)
+    st.session_state.menu = menu
+    bloco_backup_sidebar()
 
-# =================== Roteador ===================
 def roteador():
-    menu = st.session_state.menu
-    if menu == "Resumo":
+    if st.session_state.menu == "Resumo":
         tela_resumo()
-    elif menu == "Registrar Venda":
+    elif st.session_state.menu == "Registrar venda":
         tela_registrar_venda()
-    elif menu == "Clientes":
+    elif st.session_state.menu == "Clientes":
         tela_clientes()
-    elif menu == "Produtos":
+    elif st.session_state.menu == "Produtos":
         tela_produtos()
-    elif menu == "Relatórios":
+    elif st.session_state.menu == "Relatórios":
         tela_relatorios()
-    elif menu == "Acessos":
-        tela_acessos()
-
-# =================== Edição/Remoção de Vendas ===================
-def editar_remover_venda():
-    st.header("Editar / Remover Vendas")
-    if is_visitante():
-        st.warning("Visitantes não podem editar/remover vendas.")
-        return
-    cliente = st.selectbox("Selecione o cliente", list(st.session_state.clientes.keys()))
-    vendas = st.session_state.clientes.get(cliente, [])
-    for i, v in enumerate(vendas):
-        prod = st.session_state.produtos.get(v["codigo"], {"nome": "Desconhecido"})
-        col1, col2, col3 = st.columns([4,1,1])
-        col1.write(f'{prod["nome"]} | Qtde: {v["quantidade"]} | R$ {v["preco"]:.2f}')
-        if col2.button("Editar", key=f"edit_{cliente}_{i}"):
-            nova_qtde = st.number_input("Nova quantidade", min_value=1, value=v["quantidade"], key=f"input_{cliente}_{i}")
-            v["quantidade"] = nova_qtde
-            save_db()
-            st.experimental_rerun()
-        if col3.button("Remover", key=f"rm_{cliente}_{i}"):
-            vendas.pop(i)
-            save_db()
-            st.experimental_rerun()
+    elif st.session_state.menu == "Acessos":
+        # segurança extra: só mostra se não for visitante
+        if not is_visitante():
+            tela_acessos()
+        else:
+            st.error("Acesso negado.")
+    elif st.session_state.menu == "Sair":
+        st.session_state.clear()
+        st.rerun()
 
 # =============== Main ===============
 def main():
@@ -338,4 +640,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
