@@ -30,7 +30,9 @@ def autenticar(usuario, senha):
         return True
     return False
 
+# =============== Helpers ===============
 def is_visitante():
+    """Verifica se o usuário atual é visitante."""
     return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
 
 # =============== Dados iniciais ===============
@@ -247,9 +249,46 @@ def tela_acessos():
         st.text(logs)
 
 # =================== Barra Lateral ===================
+# =============== Barra Lateral Modernizada ===============
 def barra_lateral():
-    menu = st.sidebar.radio("Menu", ["Resumo", "Registrar Venda", "Clientes", "Produtos", "Relatórios", "Acessos"])
+    st.sidebar.markdown(f"<h3 style='color:#4B0082;'>Usuário: {st.session_state.usuario}</h3>", unsafe_allow_html=True)
+    st.sidebar.markdown("---")
+    
+    opcoes = ["Resumo", "Registrar venda", "Clientes", "Produtos", "Relatórios", "Sair"]
+    if not is_visitante():
+        opcoes.insert(-1, "Acessos")  # adiciona antes do "Sair" somente para usuários logados
+
+    idx_atual = opcoes.index(st.session_state.menu) if st.session_state.menu in opcoes else 0
+    menu = st.sidebar.radio("Menu", opcoes, index=idx_atual, key="menu_lateral")
     st.session_state.menu = menu
+
+    # =============== Backup na sidebar ===============
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🧰 Backup")
+    db_json = json.dumps({
+        "produtos": st.session_state.produtos,
+        "clientes": st.session_state.clientes,
+    }, ensure_ascii=False, indent=2)
+    st.sidebar.download_button("⬇️ Exportar backup (.json)", data=db_json.encode("utf-8"),
+                               file_name="backup_sistema_vendas.json")
+    
+    if not is_visitante():
+        up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
+        if up is not None:
+            try:
+                data = json.load(up)
+                prods = {int(k): v for k, v in data.get("produtos", {}).items()}
+                clis  = {k: v for k, v in data.get("clientes", {}).items()}
+                st.session_state.produtos = prods
+                st.session_state.clientes = clis
+                save_db()
+                st.sidebar.success("Backup restaurado!")
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Falha ao restaurar: {e}")
+    else:
+        st.sidebar.caption("🔒 Visitantes não podem restaurar backup.")
+
 
 # =================== Roteador ===================
 def roteador():
@@ -299,3 +338,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
