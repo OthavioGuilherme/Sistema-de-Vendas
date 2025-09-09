@@ -1,16 +1,11 @@
-# app.py
+# sistema_vendas.py
 import streamlit as st
 from datetime import datetime
 import json
 import os
 
-# =============== Config página ===============
-st.set_page_config(
-    page_title="Sistema de Vendas",
-    page_icon="🧾",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# =============== Configuração da página ===============
+st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
 # =============== Autenticação ===============
 USERS = {
@@ -20,17 +15,25 @@ USERS = {
 LOG_FILE = "acessos.log"
 DB_FILE = "db.json"
 
-def registrar_acesso(label: str):
+def registrar_acesso(usuario):
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat()} - {label}\n")
+            f.write(f"{datetime.now().isoformat()} - {usuario}\n")
     except Exception:
         pass
+
+def autenticar(usuario, senha):
+    if USERS.get(usuario) == senha:
+        st.session_state.logado = True
+        st.session_state.usuario = usuario
+        registrar_acesso(usuario)
+        return True
+    return False
 
 def is_visitante():
     return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
 
-# =============== Dados iniciais: Produtos ===============
+# =============== Dados iniciais ===============
 PRODUTOS_INICIAIS = {
     3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
     4416: {"nome": "Calcinha Inf Canelada", "preco": 13.00},
@@ -79,7 +82,6 @@ PRODUTOS_INICIAIS = {
     4460: {"nome": "Meia Masc Saulo Kit C/3", "preco": 31.50},
 }
 
-# =============== Vendas iniciais ===============
 VENDAS_INICIAIS = {
     "Tabata": [
         {"codigo": 4685, "quantidade": 1, "preco": 52.95},
@@ -112,7 +114,7 @@ VENDAS_INICIAIS = {
         {"codigo": 4539, "quantidade": 1, "preco": 19.35},
     ],
     "Pamela": [
-        {"codigo": 4681, "quantidade": 1, "preco": 41.20},
+        {"codigo": 4681, "quantidade": 1, "preco": 11.20},
         {"codigo": 4459, "quantidade": 1, "preco": 19.75},
         {"codigo": 4497, "quantidade": 1, "preco": 27.15},
         {"codigo": 4673, "quantidade": 1, "preco": 83.80},
@@ -129,7 +131,7 @@ VENDAS_INICIAIS = {
     ],
 }
 
-# =============== Persistência (JSON) ===============
+# =============== Persistência ===============
 def save_db():
     try:
         data = {
@@ -149,12 +151,12 @@ def load_db():
             prods = {int(k): v for k, v in data.get("produtos", {}).items()}
             clis = {k: v for k, v in data.get("clientes", {}).items()}
             return prods, clis
-        except Exception:
+        except:
             pass
     return ({k: v.copy() for k, v in PRODUTOS_INICIAIS.items()},
             {k: [i.copy() for i in lst] for k, lst in VENDAS_INICIAIS.items()})
 
-# =============== Session state ===============
+# =============== Session State ===============
 if "logado" not in st.session_state:
     st.session_state.logado = False
 if "usuario" not in st.session_state:
@@ -170,9 +172,122 @@ if "filtro_cliente" not in st.session_state:
 if "menu" not in st.session_state:
     st.session_state.menu = "Resumo"
 
-# =============== Helpers e funções de relatório ===============
-# (aqui incluímos total_cliente, total_geral, relatórios, filtros, etc)
-# ... [O resto do código continua igual ao que você enviou, incluindo todas as funções: tela_login, tela_resumo, tela_registrar_venda, tela_clientes, tela_produtos, tela_relatorios, tela_acessos, barra_lateral, roteador, main] ...
+# ===================================================
+# =================== Helpers ===================
+def total_cliente(nome):
+    vendas = st.session_state.clientes.get(nome, [])
+    return sum(item["preco"] * item["quantidade"] for item in vendas)
+
+def total_geral():
+    return sum(total_cliente(c) for c in st.session_state.clientes)
+
+def listar_produtos():
+    return [(codigo, info["nome"], info["preco"]) for codigo, info in st.session_state.produtos.items()]
+
+# =================== Telas ===================
+def tela_login():
+    st.title("🧾 Sistema de Vendas - Login")
+    usuario = st.text_input("Usuário")
+    senha = st.text_input("Senha", type="password")
+    if st.button("Entrar"):
+        if autenticar(usuario, senha):
+            st.success(f"Bem-vindo(a), {usuario}!")
+        else:
+            st.error("Usuário ou senha inválidos.")
+
+def tela_resumo():
+    st.header("Resumo de Vendas")
+    st.write(f"**Total Geral:** R$ {total_geral():.2f}")
+    for cliente in st.session_state.clientes:
+        st.write(f"- {cliente}: R$ {total_cliente(cliente):.2f}")
+
+def tela_registrar_venda():
+    st.header("Registrar Nova Venda")
+    if is_visitante():
+        st.warning("Visitantes não podem registrar vendas.")
+        return
+    cliente = st.text_input("Nome do Cliente")
+    codigo = st.number_input("Código do Produto", min_value=0)
+    quantidade = st.number_input("Quantidade", min_value=1, value=1)
+    if st.button("Adicionar Venda"):
+        produto = st.session_state.produtos.get(codigo)
+        if not produto:
+            st.error("Produto não encontrado.")
+            return
+        venda = {"codigo": codigo, "quantidade": quantidade, "preco": produto["preco"]}
+        st.session_state.clientes.setdefault(cliente, []).append(venda)
+        save_db()
+        st.success(f"Venda registrada para {cliente}.")
+
+def tela_clientes():
+    st.header("Clientes")
+    for cliente, vendas in st.session_state.clientes.items():
+        st.subheader(cliente)
+        for v in vendas:
+            prod = st.session_state.produtos.get(v["codigo"], {"nome":"Desconhecido"})
+            st.write(f'{prod["nome"]} | Qtde: {v["quantidade"]} | R$ {v["preco"]:.2f}')
+
+def tela_produtos():
+    st.header("Produtos")
+    for codigo, info in st.session_state.produtos.items():
+        st.write(f'{codigo} - {info["nome"]} - R$ {info["preco"]:.2f}')
+
+def tela_relatorios():
+    st.header("Relatórios")
+    st.write("**Relatório de vendas por cliente:**")
+    for cliente in st.session_state.clientes:
+        st.write(f"- {cliente}: R$ {total_cliente(cliente):.2f}")
+    st.write(f"**Total geral:** R$ {total_geral():.2f}")
+
+def tela_acessos():
+    st.header("Histórico de Acessos")
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            logs = f.read()
+        st.text(logs)
+
+# =================== Barra Lateral ===================
+def barra_lateral():
+    menu = st.sidebar.radio("Menu", ["Resumo", "Registrar Venda", "Clientes", "Produtos", "Relatórios", "Acessos"])
+    st.session_state.menu = menu
+
+# =================== Roteador ===================
+def roteador():
+    menu = st.session_state.menu
+    if menu == "Resumo":
+        tela_resumo()
+    elif menu == "Registrar Venda":
+        tela_registrar_venda()
+    elif menu == "Clientes":
+        tela_clientes()
+    elif menu == "Produtos":
+        tela_produtos()
+    elif menu == "Relatórios":
+        tela_relatorios()
+    elif menu == "Acessos":
+        tela_acessos()
+
+# =================== Edição/Remoção de Vendas ===================
+def editar_remover_venda():
+    st.header("Editar / Remover Vendas")
+    if is_visitante():
+        st.warning("Visitantes não podem editar/remover vendas.")
+        return
+    cliente = st.selectbox("Selecione o cliente", list(st.session_state.clientes.keys()))
+    vendas = st.session_state.clientes.get(cliente, [])
+    for i, v in enumerate(vendas):
+        prod = st.session_state.produtos.get(v["codigo"], {"nome": "Desconhecido"})
+        col1, col2, col3 = st.columns([4,1,1])
+        col1.write(f'{prod["nome"]} | Qtde: {v["quantidade"]} | R$ {v["preco"]:.2f}')
+        if col2.button("Editar", key=f"edit_{cliente}_{i}"):
+            nova_qtde = st.number_input("Nova quantidade", min_value=1, value=v["quantidade"], key=f"input_{cliente}_{i}")
+            v["quantidade"] = nova_qtde
+            save_db()
+            st.experimental_rerun()
+        if col3.button("Remover", key=f"rm_{cliente}_{i}"):
+            vendas.pop(i)
+            save_db()
+            st.experimental_rerun()
 
 # =============== Main ===============
 def main():
