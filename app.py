@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 import os
 import io
+import re
 
 # =============== Config página ===============
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
@@ -161,6 +162,82 @@ def load_db():
     # caso não exista/erro, retorna iniciais
     return ({k: v.copy() for k, v in PRODUTOS_INICIAIS.items()},
             {k: [i.copy() for i in lst] for k, lst in VENDAS_INICIAIS.items()})
+
+# =============== Novas funcionalidades solicitadas ===============
+def substituir_estoque_from_text(novos_dados_texto: str):
+    """
+    Substitui todo o mapa de produtos (estoque) pelos dados colados.
+    Formato esperado por linha (separador ';' preferencial):
+      codigo;quantidade;nome;valor_unitario;valor_total
+    Apenas 'codigo' e 'nome' + 'valor_unitario' são usados para compor
+    o dicionário de produtos conforme o padrão do sistema ({cod: {"nome":.., "preco":..}}).
+    Linhas com formato inválido são ignoradas.
+    """
+    if not isinstance(novos_dados_texto, str) or not novos_dados_texto.strip():
+        raise ValueError("Texto vazio")
+
+    novos_produtos = {}
+    linhas = [ln.strip() for ln in novos_dados_texto.strip().splitlines() if ln.strip()]
+    for linha in linhas:
+        # split por ';' preferencial, se não houver tenta por ','
+        partes = re.split(r'[;,\t]+', linha)
+        # aceita formatos com pelo menos: codigo;nome ou codigo;quantidade;nome;valor_unitario
+        if len(partes) < 2:
+            # ignorar linha inválida
+            continue
+        # tenta extrair código (primeira coluna)
+        try:
+            codigo = int(partes[0].strip())
+        except Exception:
+            # pula linha inválida
+            continue
+        # tenta achar preço: se houver 4ª coluna usa essa, se houver 3ª pode ser nome ou preço
+        nome = None
+        preco = 0.0
+        if len(partes) >= 4:
+            # formato esperado: codigo;quantidade;nome;valor_unitario;...
+            nome = partes[2].strip()
+            try:
+                preco = float(partes[3].strip().replace(",", "."))
+            except:
+                preco = 0.0
+        elif len(partes) == 3:
+            # pode ser codigo;nome;valor  ou codigo;quantidade;nome
+            # tentamos interpretar a terceira como nome (mais provável)
+            # e deixar preco = 0.0
+            nome = partes[2].strip()
+            # mas se a segunda parte for nome e a terceira for preco (incomum), vamos tentar detectar:
+            # se segunda parte não é numérica e terceira é numérica, tratamos accordingly
+            if not re.fullmatch(r'[-+]?\d+(\.\d+)?', partes[1].strip()) and re.search(r'\d', partes[2]):
+                # tenta extrair preco da terceira
+                try:
+                    preco = float(partes[2].strip().replace(",", "."))
+                    # assume que nome está na segunda
+                    nome = partes[1].strip()
+                except:
+                    pass
+        else:
+            # apenas duas colunas: codigo;nome
+            nome = partes[1].strip()
+
+        if not nome:
+            # ignora se não conseguimos nome
+            nome = f"Cód {codigo}"
+
+        novos_produtos[int(codigo)] = {"nome": nome, "preco": float(preco)}
+
+    # Substitui totalmente o estoque atual
+    st.session_state.produtos = novos_produtos
+    save_db()
+
+def zerar_todas_vendas():
+    """
+    Zera todas as vendas no sistema, mantendo os clientes cadastrados.
+    Ou seja, para cada cliente, substitui a lista de vendas por lista vazia.
+    """
+    for k in list(st.session_state.clientes.keys()):
+        st.session_state.clientes[k] = []
+    save_db()
 
 # =============== Session state ===============
 if "logado" not in st.session_state:
@@ -597,6 +674,39 @@ def bloco_backup_sidebar():
                 st.sidebar.error(f"Falha ao restaurar: {e}")
     else:
         st.sidebar.caption("🔒 Restauração disponível apenas para usuários logados.")
+
+    # === Novas opções: Substituir estoque e Zerar vendas (apenas para usuários logados) ===
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🧾 Gerenciar Estoque / Vendas")
+    if is_visitante():
+        st.sidebar.caption("🔒 Apenas usuários logados podem substituir o estoque ou zerar vendas.")
+    else:
+        st.sidebar.caption("Substituir estoque: cole os códigos/formato abaixo e pressione o botão.")
+        st.sidebar.caption("Formato por linha (preferencial): codigo;quantidade;nome;valor_unitario;valor_total")
+        texto_colado = st.sidebar.text_area("Colar novos códigos aqui (uma linha por produto)", height=200)
+        if st.sidebar.button("Substituir estoque com os dados colados"):
+            try:
+                substituir_estoque_from_text(texto_colado)
+                st.sidebar.success("Estoque substituído com sucesso.")
+                registrar_acesso(f"substituir_estoque: {st.session_state.usuario}")
+                st.experimental_rerun()
+            except Exception as e:
+                st.sidebar.error(f"Falha ao substituir o estoque: {e}")
+
+        st.sidebar.markdown("#### Zerar vendas (apaga registros de vendas, mantém clientes e produtos)")
+        st.sidebar.caption("Esta ação **limpa todas as vendas** registradas. Para executar, marque a confirmação abaixo e clique em 'Zerar vendas'.")
+        confirmar_zerar = st.sidebar.checkbox("Confirmo que quero zerar todas as vendas")
+        if st.sidebar.button("Zerar vendas"):
+            if not confirmar_zerar:
+                st.sidebar.warning("Marque a confirmação antes de zerar vendas.")
+            else:
+                try:
+                    zerar_todas_vendas()
+                    st.sidebar.success("Todas as vendas foram zeradas.")
+                    registrar_acesso(f"zerar_vendas: {st.session_state.usuario}")
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.sidebar.error(f"Falha ao zerar vendas: {e}")
 
 def barra_lateral():
     st.sidebar.markdown(f"**Usuário:** {st.session_state.usuario}")
