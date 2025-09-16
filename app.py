@@ -7,16 +7,16 @@ import io
 import pdfplumber
 import re
 
-# =============== Configuração da página ===============
+# ================= Configuração da página =================
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# =============== Usuários ===============
+# ================= Usuários =================
 USERS = {
     "othavio": "122008",
     "isabela": "122008",
 }
 LOG_FILE = "acessos.log"
-DB_FILE  = "db.json"
+DB_FILE = "db.json"
 
 def registrar_acesso(label: str):
     try:
@@ -25,11 +25,11 @@ def registrar_acesso(label: str):
     except Exception:
         pass
 
-# =============== Controle de acesso ===============
+# ================= Controle de acesso =================
 def is_visitante():
     return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
 
-# =============== Produtos iniciais ===============
+# ================= Produtos iniciais =================
 PRODUTOS_INICIAIS = {
     3900: {"nome": "Cueca Boxe Inf Animada", "preco": 15.90},
     4416: {"nome": "Calcinha Inf Canelada", "preco": 13.00},
@@ -42,7 +42,7 @@ PRODUTOS_INICIAIS = {
     3866: {"nome": "Soutien Edite", "preco": 48.80},
     4696: {"nome": "Tangão Emanuela", "preco": 26.90},
     4402: {"nome": "Cueca Fem Suede", "preco": 19.30},
-    4310: {"nome": "Tangao Nani Suede", "preco": 17.30},
+    4310: {"nome": "Tangão Nani Suede", "preco": 17.30},
     2750: {"nome": "Calça Cós Laser", "preco": 24.90},
     4705: {"nome": "Tanga Ilma", "preco": 27.70},
     4699: {"nome": "Tanga Bolívia", "preco": 18.90},
@@ -62,7 +62,7 @@ PRODUTOS_INICIAIS = {
     4543: {"nome": "Conjunto Soft Mapola", "preco": 71.00},
     4702: {"nome": "Top Sueli032", "preco": 58.40},
     4494: {"nome": "Top Import Coração", "preco": 65.10},
-    4680: {"nome": "Samba Cançao Fernando", "preco": 51.25},
+    4680: {"nome": "Samba Canção Fernando", "preco": 51.25},
     4498: {"nome": "Pijama Suede Silk", "preco": 117.20},
     4673: {"nome": "Short Doll Alice Plus", "preco": 83.80},
     4675: {"nome": "Short Doll Can. Regata", "preco": 74.55},
@@ -74,11 +74,11 @@ PRODUTOS_INICIAIS = {
     4343: {"nome": "Meia Sap Pompom Kit C/3", "preco": 28.20},
     4184: {"nome": "Meia Masc Manhattan Kit", "preco": 25.20},
     4458: {"nome": "Meia BB Pelúcia Fem", "preco": 19.75},
-    4459: {"nome": "Meia BB Pelucia Masc", "preco": 19.75},
+    4459: {"nome": "Meia BB Pelúcia Masc", "preco": 19.75},
     4460: {"nome": "Meia Masc Saulo Kit C/3", "preco": 31.50},
 }
 
-# =============== Vendas iniciais ===============
+# ================= Vendas iniciais =================
 VENDAS_INICIAIS = {
     "Tabata": [
         {"codigo": 4685, "quantidade": 1, "preco": 52.95},
@@ -99,7 +99,7 @@ VENDAS_INICIAIS = {
     ],
 }
 
-# =============== Persistência ===============
+# ================= Persistência =================
 def save_db():
     try:
         data = {
@@ -124,7 +124,7 @@ def load_db():
     return ({k: v.copy() for k, v in PRODUTOS_INICIAIS.items()},
             {k: [i.copy() for i in lst] for k, lst in VENDAS_INICIAIS.items()})
 
-# =============== Session State ===============
+# ================= Session State =================
 if "logado" not in st.session_state:
     st.session_state.logado = False
 if "usuario" not in st.session_state:
@@ -138,7 +138,7 @@ if "carrinho" not in st.session_state:
 if "filtro_cliente" not in st.session_state:
     st.session_state.filtro_cliente = ""
 
-# ==================== Helpers ====================
+# ================= Helpers =================
 def total_cliente(nome: str) -> float:
     vendas = st.session_state.clientes.get(nome, [])
     return sum(v["preco"] * v["quantidade"] for v in vendas)
@@ -154,4 +154,62 @@ def opcao_produtos_fmt():
 
 def parse_codigo_from_fmt(s: str):
     try:
-        return int(s.split(" - ",1)[
+        return int(s.split(" - ",1)[0].strip())
+    except:
+        return None
+
+# ================= Funções principais (editar, remover, etc.) =================
+def remover_venda(nome, idx):
+    try:
+        st.session_state.clientes[nome].pop(idx)
+        save_db()
+        st.success("Venda removida.")
+        st.rerun()
+    except:
+        st.error("Não foi possível remover.")
+
+def editar_venda(nome, idx, nova_qtd, novo_preco):
+    try:
+        st.session_state.clientes[nome][idx]["quantidade"] = int(nova_qtd)
+        st.session_state.clientes[nome][idx]["preco"] = float(novo_preco)
+        save_db()
+        st.success("Venda atualizada.")
+        st.rerun()
+    except:
+        st.error("Não foi possível editar.")
+
+def zerar_vendas():
+    for cliente in st.session_state.clientes:
+        st.session_state.clientes[cliente] = []
+    save_db()
+    st.success("Todas as vendas foram zeradas.")
+
+# ================= Função PDF =================
+def processar_pdf(file):
+    try:
+        pdf = pdfplumber.open(file)
+        texto = ""
+        for pagina in pdf.pages:
+            texto += pagina.extract_text() + "\n"
+        pdf.close()
+        # Regex para capturar código, nome e preço
+        padrao = re.compile(r"(\d+)\s+(\d+)\s+(.+?)\s+([\d.,]+)")
+        produtos_pdf = []
+        for linha in texto.split("\n"):
+            m = padrao.search(linha)
+            if m:
+                qtd = int(m.group(1))
+                codigo = int(m.group(2))
+                nome = m.group(3).strip()
+                preco = float(m.group(4).replace(",", "."))
+                produtos_pdf.append({"codigo": codigo, "nome": nome, "quantidade": qtd, "preco": preco})
+        return produtos_pdf
+    except Exception as e:
+        st.error(f"Erro ao processar PDF: {e}")
+        return []
+
+# ================= Telas =================
+def tela_login():
+    st.title("🔐 Login")
+    escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
+    if escolha == "Usuário
