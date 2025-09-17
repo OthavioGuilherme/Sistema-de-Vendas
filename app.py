@@ -4,6 +4,8 @@ from datetime import datetime
 import json
 import os
 import io
+import re
+import pdfplumber  # biblioteca para leitura de PDF
 
 # =============== Config página ===============
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
@@ -273,6 +275,83 @@ def apagar_cliente(nome):
     save_db()
     st.success("Cliente apagado.")
     st.rerun()
+
+# =============== Novas funcionalidades: leitura PDF / inserção manual / zerar vendas ===============
+def substituir_estoque_pdf(uploaded_file):
+    """
+    Lê o PDF enviado e extrai linhas no formato:
+      <quantidade> <codigo> <nome do produto ...> <valor unitário>
+    Substitui o mapa st.session_state.produtos pelos produtos encontrados (codigo -> {nome, preco}).
+    """
+    # ler bytes do upload (UploadedFile do Streamlit)
+    try:
+        data = uploaded_file.read()
+        if not data:
+            raise ValueError("Arquivo vazio")
+        stream = io.BytesIO(data)
+    except Exception as e:
+        raise ValueError(f"Falha ao ler arquivo: {e}")
+
+    novos_produtos = {}
+    # regex para capturar: quantidade, código (com zeros), nome (texto), preço (com , decimal e possivelmente . como separador de milhar)
+    linha_regex = re.compile(r'^\s*(\d+)\s+0*(\d{1,6})\s+(.+?)\s+((?:\d{1,3}(?:[.\,]\d{3})*|\d+)[\.,]\d{2})\s*$')
+
+    try:
+        with pdfplumber.open(stream) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if not text:
+                    continue
+                for raw_linha in text.splitlines():
+                    linha = raw_linha.strip()
+                    if not linha:
+                        continue
+                    m = linha_regex.match(linha)
+                    if m:
+                        qtd_s, codigo_s, nome_raw, preco_s = m.groups()
+                        try:
+                            codigo = int(codigo_s)
+                        except:
+                            continue
+                        # normaliza preço: remove pontos de milhar e troca vírgula por ponto
+                        preco_norm = preco_s.replace('.', '').replace(',', '.')
+                        try:
+                            preco = float(preco_norm)
+                        except:
+                            preco = 0.0
+                        nome = nome_raw.strip().title()  # converte para Title Case pra ficar parecido com seu padrão
+                        # guarda produto (mantemos apenas nome e preco no dicionário de produtos)
+                        novos_produtos[codigo] = {"nome": nome, "preco": preco}
+    except Exception as e:
+        raise ValueError(f"Falha ao processar PDF: {e}")
+
+    if not novos_produtos:
+        raise ValueError("Nenhum produto válido encontrado no PDF. Verifique o arquivo.")
+
+    # Substitui totalmente o estoque atual (produtos)
+    st.session_state.produtos = novos_produtos
+    save_db()
+
+def adicionar_produto_manual(codigo, nome, quantidade, preco_unitario):
+    """
+    Adiciona/atualiza um produto no mapa de produtos (mantendo o padrão {cod: {'nome','preco'}}).
+    Não gravamos quantidade no produto por compatibilidade com o formato atual do sistema.
+    A quantidade e o total são apenas mostrados na UI conforme solicitado.
+    """
+    try:
+        cod = int(codigo)
+    except:
+        raise ValueError("Código inválido")
+    st.session_state.produtos[cod] = {"nome": nome.strip(), "preco": float(preco_unitario)}
+    save_db()
+
+def zerar_todas_vendas():
+    """
+    Substitui a lista de vendas de cada cliente por lista vazia.
+    """
+    for k in list(st.session_state.clientes.keys()):
+        st.session_state.clientes[k] = []
+    save_db()
 
 # =============== Telas ===============
 def tela_login():
@@ -597,6 +676,68 @@ def bloco_backup_sidebar():
                 st.sidebar.error(f"Falha ao restaurar: {e}")
     else:
         st.sidebar.caption("🔒 Restauração disponível apenas para usuários logados.")
+
+    # === NOVO: Importar estoque via PDF ===
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📄 Importar Estoque via PDF")
+    if is_visitante():
+        st.sidebar.caption("🔒 Apenas usuários logados podem importar PDF.")
+    else:
+        pdf_file = st.sidebar.file_uploader("Carregar PDF da Nota", type=["pdf"], key="pdf_estoque")
+        if pdf_file is not None:
+            st.sidebar.caption("Após enviar o PDF, clique em 'Substituir estoque pelo PDF' para confirmar.")
+            if st.sidebar.button("Substituir estoque pelo PDF"):
+                try:
+                    substituir_estoque_pdf(pdf_file)
+                    st.sidebar.success("Estoque substituído com sucesso.")
+                    registrar_acesso(f"substituir_estoque_pdf: {st.session_state.usuario}")
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.sidebar.error(f"Falha ao substituir o estoque: {e}")
+
+    # === NOVO: Inserir produto manualmente (1 por vez) ===
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("✍️ Inserir Produto Manualmente")
+    if is_visitante():
+        st.sidebar.caption("🔒 Apenas usuários logados podem inserir produtos.")
+    else:
+        # inputs separados com keys para evitar conflito com outros widgets
+        cod_manual = st.sidebar.number_input("Código", min_value=1, step=1, key="cod_manual")
+        nome_manual = st.sidebar.text_input("Nome do produto", key="nome_manual")
+        qtd_manual = st.sidebar.number_input("Quantidade", min_value=1, step=1, value=1, key="qtd_manual")
+        preco_manual = st.sidebar.number_input("Preço Unitário", min_value=0.0, step=0.10, format="%.2f", key="preco_manual")
+        total_manual = qtd_manual * preco_manual
+        st.sidebar.markdown(f"**Valor Total:** R$ {total_manual:.2f}")
+        if st.sidebar.button("Adicionar Produto", key="btn_add_manual"):
+            if not str(nome_manual).strip():
+                st.sidebar.warning("Informe o nome do produto.")
+            else:
+                try:
+                    adicionar_produto_manual(cod_manual, nome_manual, qtd_manual, preco_manual)
+                    st.sidebar.success("Produto adicionado com sucesso.")
+                    registrar_acesso(f"adicionar_produto_manual: {st.session_state.usuario} - cod:{cod_manual}")
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.sidebar.error(f"Erro ao adicionar produto: {e}")
+
+    # === Zerar vendas (mantém clientes) ===
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🗑️ Zerar Vendas")
+    if is_visitante():
+        st.sidebar.caption("🔒 Apenas usuários logados podem zerar vendas.")
+    else:
+        confirmar_zerar = st.sidebar.checkbox("Confirmo que quero zerar todas as vendas", key="conf_zerar")
+        if st.sidebar.button("Zerar vendas"):
+            if not confirmar_zerar:
+                st.sidebar.warning("Marque a confirmação antes de zerar vendas.")
+            else:
+                try:
+                    zerar_todas_vendas()
+                    st.sidebar.success("Todas as vendas foram zeradas.")
+                    registrar_acesso(f"zerar_vendas: {st.session_state.usuario}")
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.sidebar.error(f"Falha ao zerar vendas: {e}")
 
 def barra_lateral():
     st.sidebar.markdown(f"**Usuário:** {st.session_state.usuario}")
