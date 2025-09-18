@@ -3,9 +3,6 @@ import streamlit as st
 from datetime import datetime
 import json
 import os
-import io
-import re
-import pdfplumber  # biblioteca para leitura de PDF
 
 # =============== Config página ===============
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
@@ -28,9 +25,17 @@ def registrar_acesso(label: str):
 def is_visitante():
     return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
 
-# =============== Dados iniciais e vendas (mantive seu original) ===============
-PRODUTOS_INICIAIS = { ... }  # Mantenha o mesmo dicionário
-VENDAS_INICIAIS = { ... }    # Mantenha o mesmo dicionário
+# =============== Dados iniciais ===============
+PRODUTOS_INICIAIS = {
+    1: {"nome": "Produto A", "preco": 10.0},
+    2: {"nome": "Produto B", "preco": 20.0},
+    3: {"nome": "Produto C", "preco": 15.5},
+}
+
+VENDAS_INICIAIS = {
+    "Cliente 1": [{"codigo": 1, "quantidade": 2, "preco": 10.0}],
+    "Cliente 2": [{"codigo": 2, "quantidade": 1, "preco": 20.0}],
+}
 
 # =============== Persistência JSON ===============
 def save_db():
@@ -175,19 +180,23 @@ def tela_login():
             else:
                 st.warning("Por favor, digite um nome.")
 
-# ----------------- Tela Registrar Venda (com remover do carrinho) -----------------
+# ----------------- Tela Resumo -----------------
+def tela_resumo():
+    st.header("📊 Resumo de Vendas")
+    st.write(f"Total geral: R$ {total_geral():.2f}")
+    for cliente in st.session_state.clientes:
+        st.write(f"**{cliente}:** R$ {total_cliente(cliente):.2f}")
+
+# ----------------- Tela Registrar Venda -----------------
 def tela_registrar_venda():
     visitante = is_visitante()
     st.header("🛒 Registrar venda")
-
     if visitante:
-        st.warning("🔒 Visitantes não podem registrar vendas. Campos apenas para visualização.")
+        st.warning("🔒 Visitantes não podem registrar vendas.")
 
-    st.session_state.filtro_cliente = st.text_input(
-        "Buscar/selecionar cliente (2+ letras):",
-        value=st.session_state.filtro_cliente,
-        disabled=visitante
-    )
+    st.session_state.filtro_cliente = st.text_input("Buscar/selecionar cliente (2+ letras):",
+                                                    value=st.session_state.filtro_cliente,
+                                                    disabled=visitante)
     sugestoes = filtrar_clientes(st.session_state.filtro_cliente)
     cliente = st.selectbox("Cliente", sugestoes, index=None, placeholder="Digite para buscar",
                            disabled=visitante) if sugestoes else None
@@ -221,7 +230,6 @@ def tela_registrar_venda():
             })
             st.success(f"Adicionado: {nomep} ({qtd}x)")
 
-    # Carrinho com remover item
     st.markdown("### Carrinho")
     if not st.session_state.carrinho:
         st.info("Carrinho vazio.")
@@ -261,12 +269,12 @@ def tela_registrar_venda():
                     st.success("Venda registrada!")
                     st.rerun()
 
-# ----------------- Tela Clientes (com adicionar produto direto) -----------------
+# ----------------- Tela Clientes -----------------
 def tela_clientes():
     visitante = is_visitante()
     st.header("👥 Clientes")
     aba_opcoes = ["Consultar cliente", "Cadastrar cliente"]
-    aba = st.radio("Ação", aba_opcoes, horizontal=True, index=0 if visitante else 0)
+    aba = st.radio("Ação", aba_opcoes, horizontal=True)
 
     if visitante and aba == "Cadastrar cliente":
         st.info("🔒 Visitantes não podem cadastrar clientes.")
@@ -325,7 +333,6 @@ def tela_clientes():
                             remover_venda(cliente, idx)
             st.markdown(f"**Total do cliente:** R$ {total:.2f}")
 
-        # Nova seção: Adicionar produto diretamente para este cliente
         st.markdown("### ➕ Adicionar produto")
         lista_fmt = opcao_produtos_fmt()
         sel = st.selectbox("Produto", lista_fmt, index=None, placeholder="Selecione um produto")
@@ -352,10 +359,48 @@ def tela_clientes():
                 st.success("Produto adicionado ao cliente!")
                 st.experimental_rerun()
 
-# ----------------- Tela Produtos e Relatórios (mantidas suas funções originais) -----------------
-# Aqui você mantém tela_produtos(), tela_relatorios(), tela_acessos() como no seu código
+# ----------------- Tela Produtos -----------------
+def tela_produtos():
+    visitante = is_visitante()
+    st.header("📦 Produtos")
+    lista_fmt = opcao_produtos_fmt()
+    for item in lista_fmt:
+        st.write(item)
 
-# ----------------- Sidebar melhorada -----------------
+    if visitante:
+        st.info("🔒 Visitantes não podem adicionar produtos.")
+        return
+
+    st.markdown("### ➕ Adicionar produto manualmente")
+    cod = st.text_input("Código do produto")
+    nome = st.text_input("Nome do produto")
+    preco = st.number_input("Preço unitário", min_value=0.0, step=0.10, format="%.2f")
+    if st.button("Adicionar produto"):
+        try:
+            adicionar_produto_manual(cod, nome, 1, preco)
+            st.success("Produto adicionado!")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Erro: {e}")
+
+# ----------------- Tela Relatórios -----------------
+def tela_relatorios():
+    st.header("📈 Relatórios")
+    st.write("Total geral de vendas:", total_geral())
+    for cliente in st.session_state.clientes:
+        st.write(f"{cliente}: {total_cliente(cliente)}")
+
+# ----------------- Tela Acessos -----------------
+def tela_acessos():
+    st.header("🔑 Acessos")
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            logs = f.read()
+        st.text_area("Log de acessos", logs, height=300)
+    else:
+        st.info("Nenhum acesso registrado.")
+
+# ----------------- Sidebar -----------------
 def bloco_backup_sidebar():
     st.sidebar.markdown("---")
     st.sidebar.subheader("🧰 Backup & Estoque")
@@ -367,36 +412,4 @@ def bloco_backup_sidebar():
                                file_name="backup_sistema_vendas.json")
     if not is_visitante():
         up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
-        if up is not None:
-            try:
-                data = json.load(up)
-                prods = {int(k): v for k, v in data.get("produtos", {}).items()}
-                clis  = {k: v for k, v in data.get("clientes", {}).items()}
-                st.session_state.produtos = prods
-                st.session_state.clientes = clis
-                save_db()
-                st.sidebar.success("Backup restaurado!")
-                st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Falha ao restaurar: {e}")
-
-# ----------------- Barra lateral -----------------
-def barra_lateral():
-    st.sidebar.markdown(f"**Usuário:** {st.session_state.usuario}")
-    opcoes = ["Resumo", "Registrar venda", "Clientes", "Produtos", "Relatórios", "Sair"]
-    if not is_visitante():
-        opcoes.insert(-1, "Acessos")
-    idx_atual = opcoes.index(st.session_state.menu) if st.session_state.menu in opcoes else 0
-    menu = st.sidebar.radio("Menu", opcoes, index=idx_atual)
-    st.session_state.menu = menu
-    bloco_backup_sidebar()
-
-# ----------------- Roteador -----------------
-def roteador():
-    if st.session_state.menu == "Resumo":
-        tela_resumo()
-    elif st.session_state.menu == "Registrar venda":
-        tela_registrar_venda()
-    elif st.session_state.menu == "Clientes":
-        tela_clientes()
-    elif st.session
+       
