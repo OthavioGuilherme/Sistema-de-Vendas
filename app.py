@@ -31,7 +31,7 @@ def registrar_acesso(label: str):
 
 def is_visitante():
     return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
-
+        
 # =============== Dados iniciais (pode personalizar) ===============
 PRODUTOS_INICIAIS = {
     1001: {"nome": "Camiseta Polo", "preco": 59.90},
@@ -166,17 +166,30 @@ def zerar_todas_vendas():
         st.session_state.clientes[k] = []
     save_db()
 # ==========================
-# Parte 2 - Telas principais
+# Parte 2 - Telas principais (atualizada)
 # ==========================
 
-import pytesseract
-from PIL import Image, ImageEnhance, ImageFilter
-import re
+# ---------------- Tela Login ----------------
+def tela_login():
+    st.title("🔑 Login")
+
+    usuario = st.text_input("Usuário")
+    senha = st.text_input("Senha", type="password")
+
+    if st.button("Entrar"):
+        if usuario in USERS and USERS[usuario] == senha:
+            st.session_state.logado = True
+            st.session_state.usuario = usuario
+            registrar_acesso(f"Login: {usuario}")
+            st.success(f"Bem-vindo(a), {usuario}!")
+            st.rerun()
+        else:
+            st.error("Usuário ou senha incorretos.")
 
 # ---------------- Tela Resumo ----------------
 def tela_resumo():
     st.title("📊 Resumo")
-    vendas = st.session_state.db["vendas"]
+    vendas = st.session_state.db.get("vendas", [])
     if not vendas:
         st.info("Nenhuma venda registrada ainda.")
         return
@@ -187,18 +200,22 @@ def tela_resumo():
     for v in vendas:
         with st.expander(f"{v['cliente']} - {v['data']} - R$ {v['total']:.2f}"):
             for p in v["produtos"]:
-                st.write(f"- {p['nome']} (Ref {p['codigo']}): {p['preco']:.2f}")
+                st.write(f"- {p['nome']} (Ref {p['codigo']}): R$ {p['preco']:.2f}")
 
 # ---------------- Tela Registrar Venda Manual ----------------
 def tela_registrar_venda():
     st.title("🛒 Registrar Venda (Manual)")
 
-    clientes = list(st.session_state.db["clientes"].keys())
+    clientes = list(st.session_state.db.get("clientes", {}).keys())
+    if not clientes:
+        st.info("Nenhum cliente cadastrado.")
+        return
     cliente = st.selectbox("Selecione o cliente", options=clientes)
 
     carrinho = st.session_state.get("carrinho", [])
 
-    produto = st.selectbox("Selecione o produto", options=st.session_state.db["produtos"])
+    produtos = list(st.session_state.db.get("produtos", {}).values())
+    produto = st.selectbox("Selecione o produto", options=produtos, format_func=lambda x: f"{x['nome']} (R$ {x['preco']:.2f})")
     if st.button("Adicionar ao carrinho"):
         carrinho.append(produto)
         st.session_state.carrinho = carrinho
@@ -206,7 +223,7 @@ def tela_registrar_venda():
     st.subheader("Carrinho")
     if carrinho:
         for i, p in enumerate(carrinho):
-            col1, col2, col3 = st.columns([3, 1, 1])
+            col1, col2 = st.columns([4,1])
             col1.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
             if col2.button("Remover", key=f"rem{i}"):
                 carrinho.pop(i)
@@ -223,8 +240,10 @@ def tela_registrar_venda():
                 "produtos": carrinho.copy(),
                 "total": total
             }
+            if "vendas" not in st.session_state.db:
+                st.session_state.db["vendas"] = []
             st.session_state.db["vendas"].append(nova_venda)
-            salvar_db()
+            save_db()
             st.session_state.carrinho = []
             st.success("Venda registrada com sucesso!")
             st.rerun()
@@ -235,7 +254,10 @@ def tela_registrar_venda():
 def tela_registrar_venda_foto():
     st.title("📷 Registrar Venda (Por Foto)")
 
-    clientes = list(st.session_state.db["clientes"].keys())
+    clientes = list(st.session_state.db.get("clientes", {}).keys())
+    if not clientes:
+        st.info("Nenhum cliente cadastrado.")
+        return
     cliente = st.selectbox("Selecione o cliente", options=clientes, key="foto_cliente")
 
     uploaded_file = st.file_uploader("Envie a foto da etiqueta do produto", type=["jpg", "jpeg", "png"])
@@ -282,7 +304,7 @@ def tela_registrar_venda_foto():
     carrinho = st.session_state.get("carrinho_foto", [])
     if carrinho:
         for i, p in enumerate(carrinho):
-            col1, col2, col3 = st.columns([3, 1, 1])
+            col1, col2 = st.columns([4,1])
             col1.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
             if col2.button("Remover", key=f"rem_foto{i}"):
                 carrinho.pop(i)
@@ -299,8 +321,10 @@ def tela_registrar_venda_foto():
                 "produtos": carrinho.copy(),
                 "total": total
             }
+            if "vendas" not in st.session_state.db:
+                st.session_state.db["vendas"] = []
             st.session_state.db["vendas"].append(nova_venda)
-            salvar_db()
+            save_db()
             st.session_state.carrinho_foto = []
             st.success("Venda registrada com sucesso!")
             st.rerun()
@@ -310,13 +334,13 @@ def tela_registrar_venda_foto():
 # ---------------- Tela Clientes ----------------
 def tela_clientes():
     st.title("👥 Clientes")
-    clientes = st.session_state.db["clientes"]
+    clientes = st.session_state.db.get("clientes", {})
 
     novo_cliente = st.text_input("Adicionar novo cliente")
     if st.button("Adicionar cliente"):
         if novo_cliente and novo_cliente not in clientes:
             clientes[novo_cliente] = []
-            salvar_db()
+            save_db()
             st.success("Cliente adicionado.")
             st.rerun()
 
@@ -327,19 +351,19 @@ def tela_clientes():
                 novo_nome = st.text_input(f"Novo nome para {cliente}", key=f"in_ren_{cliente}")
                 if st.button("Salvar", key=f"salvar_{cliente}"):
                     clientes[novo_nome] = clientes.pop(cliente)
-                    salvar_db()
+                    save_db()
                     st.success("Cliente renomeado.")
                     st.rerun()
             if col2.button("Apagar", key=f"del_{cliente}"):
                 del clientes[cliente]
-                salvar_db()
+                save_db()
                 st.warning("Cliente removido.")
                 st.rerun()
 
 # ---------------- Tela Produtos ----------------
 def tela_produtos():
     st.title("📦 Produtos")
-    produtos = st.session_state.db["produtos"]
+    produtos = st.session_state.db.get("produtos", {})
 
     codigo = st.text_input("Código do produto")
     nome = st.text_input("Nome do produto")
@@ -347,18 +371,18 @@ def tela_produtos():
 
     if st.button("Adicionar produto"):
         if codigo and nome and preco > 0:
-            produtos.append({"codigo": codigo, "nome": nome, "preco": preco})
-            salvar_db()
+            produtos[codigo] = {"nome": nome.strip(), "preco": preco}
+            save_db()
             st.success("Produto adicionado.")
             st.rerun()
 
-    for p in produtos:
-        st.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
+    for cod, p in produtos.items():
+        st.write(f"{p['nome']} (Ref {cod}) - R$ {p['preco']:.2f}")
 
 # ---------------- Tela Relatórios ----------------
 def tela_relatorios():
     st.title("📑 Relatórios")
-    vendas = st.session_state.db["vendas"]
+    vendas = st.session_state.db.get("vendas", [])
     if not vendas:
         st.info("Nenhuma venda registrada.")
         return
@@ -369,8 +393,11 @@ def tela_relatorios():
 # ---------------- Tela Acessos ----------------
 def tela_acessos():
     st.title("🔐 Acessos")
-    with open(LOG_FILE, "r") as f:
-        st.text(f.read())
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            st.text(f.read())
+    else:
+        st.info("Nenhum registro de acesso encontrado.")
 # ==========================
 # Parte 3 - Roteamento e Sidebar
 # ==========================
