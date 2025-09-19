@@ -399,9 +399,20 @@ def tela_acessos():
     else:
         st.info("Nenhum registro de acesso encontrado.")
 # ==========================
-# Parte 3 - Roteamento e Sidebar
+# Parte 3 - Roteamento e Sidebar (atualizada)
 # ==========================
 
+# ----------------- Bloco de backup sidebar -----------------
+def bloco_backup_sidebar():
+    """
+    Exibe informações de backup na sidebar.
+    Pode ser adaptado para implementar backup real.
+    """
+    st.sidebar.markdown("---")
+    st.sidebar.info("🔄 Backup automático não implementado.\nNada será perdido ao fechar o app.")
+
+
+# ----------------- Sidebar -----------------
 def barra_lateral():
     st.sidebar.markdown(f"**Usuário:** {st.session_state.usuario}")
 
@@ -417,18 +428,31 @@ def barra_lateral():
     if not is_visitante():
         opcoes.insert(-1, "Acessos")
 
+    # Mantém a seleção atual
     idx_atual = opcoes.index(st.session_state.menu) if st.session_state.menu in opcoes else 0
     st.session_state.menu = st.sidebar.radio("Menu", opcoes, index=idx_atual)
 
+    # Exibe bloco de backup
     bloco_backup_sidebar()
+
 
 # ----------------- Roteador principal -----------------
 def main():
+    # Inicializa db se não existir
+    if "db" not in st.session_state:
+        st.session_state.db = {
+            "produtos": st.session_state.produtos,
+            "clientes": st.session_state.clientes,
+            "vendas": []
+        }
+
+    # Se não estiver logado, mostra login
     if not st.session_state.logado:
         tela_login()
     else:
         barra_lateral()
         menu = st.session_state.menu
+
         if menu == "Resumo":
             tela_resumo()
         elif menu == "Registrar venda":
@@ -447,6 +471,7 @@ def main():
             st.session_state.logado = False
             st.session_state.usuario = None
             st.rerun()
+
 
 # ----------------- Start app -----------------
 if __name__ == "__main__":
