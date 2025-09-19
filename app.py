@@ -399,7 +399,7 @@ def tela_acessos():
     else:
         st.info("Nenhum registro de acesso encontrado.")
 # ==========================
-# Parte 3 - Roteamento e Sidebar (atualizada)
+# Parte 3 - Roteamento e Sidebar (final)
 # ==========================
 
 # ----------------- Bloco de backup sidebar -----------------
@@ -428,8 +428,12 @@ def barra_lateral():
     if not is_visitante():
         opcoes.insert(-1, "Acessos")
 
+    # Inicializa menu se não existir ou estiver inválido
+    if "menu" not in st.session_state or st.session_state.menu not in opcoes:
+        st.session_state.menu = "Resumo"
+
     # Mantém a seleção atual
-    idx_atual = opcoes.index(st.session_state.menu) if st.session_state.menu in opcoes else 0
+    idx_atual = opcoes.index(st.session_state.menu)
     st.session_state.menu = st.sidebar.radio("Menu", opcoes, index=idx_atual)
 
     # Exibe bloco de backup
