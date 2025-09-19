@@ -1,77 +1,29 @@
 # ==========================
-# Parte 1 - Configuração, Banco e Utilitários
+# Parte 1 - Configuração, Banco e Utilitários (com lembrar login)
 # ==========================
 
 import streamlit as st
 from datetime import datetime
 import json
 import os
-import re
 from PIL import Image
 import pytesseract
 
 # =============== Config página ===============
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# =============== Arquivos ===================
+# =============== Arquivos ===============
 LOG_FILE = "acessos.log"
-DB_FILE  = "db.json"
-USERS_FILE = "usuarios.json"  # arquivo para salvar logins
+DB_FILE = "db.json"
+LOGIN_FILE = "login_salvo.json"  # arquivo para salvar login
 
-# =============== Dados iniciais ===================
-PRODUTOS_INICIAIS = {
-    1001: {"nome": "Camiseta Polo", "preco": 59.90},
-    1002: {"nome": "Calça Jeans", "preco": 120.00},
-    1003: {"nome": "Tênis Esportivo", "preco": 199.99},
-    1004: {"nome": "Boné Estiloso", "preco": 39.90},
+# =============== Usuários ==================
+USERS = {
+    "othavio": "122008",
+    "isabela": "122008",
 }
 
-VENDAS_INICIAIS = {}  # começando zerado
-
-# =============== Funções de persistência ===================
-def save_db():
-    try:
-        data = {
-            "produtos": st.session_state.produtos,
-            "clientes": st.session_state.clientes,
-            "vendas": st.session_state.vendas
-        }
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.toast(f"Falha ao salvar DB: {e}", icon="⚠️")
-
-def load_db():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            prods = {int(k): v for k, v in data.get("produtos", {}).items()}
-            clis  = {k: v for k, v in data.get("clientes", {}).items()}
-            vendas = data.get("vendas", [])
-            return prods, clis, vendas
-        except Exception:
-            pass
-    return ({k: v.copy() for k, v in PRODUTOS_INICIAIS.items()},
-            {},
-            [])
-
-# =============== Autenticação ===================
-def load_users():
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_users(users_dict):
-    with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(users_dict, f, ensure_ascii=False, indent=2)
-
-USERS = load_users()  # carrega usuários salvos
-
+# ================= Funções =================
 def registrar_acesso(label: str):
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -82,26 +34,68 @@ def registrar_acesso(label: str):
 def is_visitante():
     return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
 
-# =============== Session state inicial ===================
+# ================= Persistência JSON =================
+def save_db():
+    try:
+        data = {
+            "produtos": st.session_state.produtos,
+            "clientes": st.session_state.clientes,
+            "vendas": st.session_state.vendas,
+        }
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.toast(f"Falha ao salvar: {e}", icon="⚠️")
+
+def load_db():
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            prods = {int(k): v for k, v in data.get("produtos", {}).items()}
+            clis = {k: v for k, v in data.get("clientes", {}).items()}
+            vendas = data.get("vendas", [])
+            return prods, clis, vendas
+        except Exception:
+            pass
+    return {}, {}, []
+
+def save_login(usuario):
+    try:
+        with open(LOGIN_FILE, "w", encoding="utf-8") as f:
+            json.dump({"usuario": usuario}, f)
+    except:
+        pass
+
+def load_login():
+    if os.path.exists(LOGIN_FILE):
+        try:
+            with open(LOGIN_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("usuario", "")
+        except:
+            return ""
+    return ""
+
+# =============== Session state inicial =================
 if "logado" not in st.session_state:
     st.session_state.logado = False
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
-if "produtos" not in st.session_state:
+if "produtos" not in st.session_state or "clientes" not in st.session_state or "vendas" not in st.session_state:
     p, c, v = load_db()
     st.session_state.produtos = p
     st.session_state.clientes = c
     st.session_state.vendas = v
+
 if "carrinho" not in st.session_state:
     st.session_state.carrinho = []
-if "carrinho_foto" not in st.session_state:
-    st.session_state.carrinho_foto = []
 if "filtro_cliente" not in st.session_state:
     st.session_state.filtro_cliente = ""
 if "menu" not in st.session_state:
     st.session_state.menu = "Resumo"
 
-# =============== Helpers ===================
+# ================= Helpers =================
 def total_cliente(nome: str) -> float:
     vendas = st.session_state.clientes.get(nome, [])
     return sum(v["preco"] * v["quantidade"] for v in vendas)
@@ -109,75 +103,38 @@ def total_cliente(nome: str) -> float:
 def total_geral() -> float:
     return sum(total_cliente(c) for c in st.session_state.clientes.keys())
 
-def opcao_produtos_fmt():
-    items = []
-    for cod, dados in st.session_state.produtos.items():
-        items.append(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
-    return sorted(items, key=lambda s: s.split(" - ",1)[1].lower())
+# ================= Login =================
+def tela_login():
+    st.title("🔑 Login")
 
-def parse_codigo_from_fmt(s: str):
-    try:
-        return int(s.split(" - ",1)[0].strip())
-    except:
-        return None
+    usuario_salvo = load_login()
 
-def filtrar_clientes(filtro: str):
-    if not filtro or len(filtro.strip()) < 2:
-        return []
-    f = filtro.strip().lower()
-    return sorted([c for c in st.session_state.clientes if f in c.lower()], key=lambda x: x.lower())
+    col1, col2 = st.columns(2)
+    with col1:
+        usuario = st.text_input("Usuário", value=usuario_salvo, key="usuario_input")
+        senha = st.text_input("Senha", type="password", key="senha_input")
+        lembrar = st.checkbox("Lembrar meu login")
 
-def remover_venda(nome, idx):
-    try:
-        st.session_state.clientes[nome].pop(idx)
-        save_db()
-        st.success("Venda removida.")
-        st.rerun()
-    except:
-        st.error("Não foi possível remover.")
+        if st.button("Entrar"):
+            if usuario.strip() in USERS and senha.strip() == USERS[usuario.strip()]:
+                st.session_state.usuario = usuario.strip()
+                st.session_state.logado = True
+                registrar_acesso(f"Login - {usuario}")
+                if lembrar:
+                    save_login(usuario.strip())
+                st.success(f"Bem-vindo {usuario}!")
+                st.experimental_rerun()
+            else:
+                st.error("Usuário ou senha inválidos")
 
-def editar_venda(nome, idx, nova_qtd, novo_preco):
-    try:
-        st.session_state.clientes[nome][idx]["quantidade"] = int(nova_qtd)
-        st.session_state.clientes[nome][idx]["preco"] = float(novo_preco)
-        save_db()
-        st.success("Venda atualizada.")
-        st.rerun()
-    except:
-        st.error("Não foi possível editar.")
-
-def renomear_cliente(nome_antigo, nome_novo):
-    if not nome_novo.strip():
-        st.warning("Informe um nome válido.")
-        return
-    if nome_novo in st.session_state.clientes and nome_novo != nome_antigo:
-        st.warning("Já existe cliente com esse nome.")
-        return
-    st.session_state.clientes[nome_novo] = st.session_state.clientes.pop(nome_antigo)
-    save_db()
-    st.success("Cliente renomeado.")
-    st.rerun()
-
-def apagar_cliente(nome):
-    st.session_state.clientes.pop(nome, None)
-    save_db()
-    st.success("Cliente apagado.")
-    st.rerun()
-
-def adicionar_produto_manual(codigo, nome, preco_unitario):
-    try:
-        cod = int(codigo)
-    except:
-        raise ValueError("Código inválido")
-    st.session_state.produtos[cod] = {"nome": nome.strip(), "preco": float(preco_unitario)}
-    save_db()
-
-def zerar_todas_vendas():
-    for k in list(st.session_state.clientes.keys()):
-        st.session_state.clientes[k] = []
-    st.session_state.vendas = []
-    save_db()
-# ==========================
+    with col2:
+        st.write("Ou entre como visitante")
+        if st.button("Entrar como visitante"):
+            st.session_state.usuario = f"visitante-{int(datetime.now().timestamp())}"
+            st.session_state.logado = True
+            st.info("Você entrou como visitante (apenas leitura)")
+            st.experimental_rerun()
+# ========================== PARTE 2
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 import re
