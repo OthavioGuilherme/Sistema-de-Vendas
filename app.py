@@ -13,37 +13,22 @@ import pytesseract
 # =============== Config página ===============
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# =============== Autenticação ===============
-USERS = {
-    "othavio": "122008",
-    "isabela": "122008",
-}
+# =============== Arquivos ===================
 LOG_FILE = "acessos.log"
 DB_FILE  = "db.json"
+USERS_FILE = "usuarios.json"  # arquivo para salvar logins
 
-def registrar_acesso(label: str):
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat()} - {label}\n")
-    except Exception:
-        pass
-
-def is_visitante():
-    return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
-
-# =============== Espaço para produtos e clientes iniciais ===============
-# Cole seus produtos aqui (exemplo abaixo)
+# =============== Dados iniciais ===================
 PRODUTOS_INICIAIS = {
-    # 1001: {"nome": "Camiseta Polo", "preco": 59.90},
-    # 1002: {"nome": "Calça Jeans", "preco": 120.00},
+    1001: {"nome": "Camiseta Polo", "preco": 59.90},
+    1002: {"nome": "Calça Jeans", "preco": 120.00},
+    1003: {"nome": "Tênis Esportivo", "preco": 199.99},
+    1004: {"nome": "Boné Estiloso", "preco": 39.90},
 }
 
-# Cole seus clientes e histórico de vendas aqui (exemplo vazio para começar do zero)
-CLIENTES_INICIAIS = {
-    # "Maria": [{"codigo": 1001, "quantidade": 2, "preco": 59.90}],
-}
+VENDAS_INICIAIS = {}  # começando zerado
 
-# =============== Persistência JSON ===============
+# =============== Funções de persistência ===================
 def save_db():
     try:
         data = {
@@ -54,7 +39,7 @@ def save_db():
         with open(DB_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        st.toast(f"Falha ao salvar: {e}", icon="⚠️")
+        st.toast(f"Falha ao salvar DB: {e}", icon="⚠️")
 
 def load_db():
     if os.path.exists(DB_FILE):
@@ -67,21 +52,46 @@ def load_db():
             return prods, clis, vendas
         except Exception:
             pass
-    # Se não houver DB, retorna os iniciais
-    return PRODUTOS_INICIAIS.copy(), CLIENTES_INICIAIS.copy(), []
+    return ({k: v.copy() for k, v in PRODUTOS_INICIAIS.items()},
+            {},
+            [])
 
-# =============== Session state inicial ===============
+# =============== Autenticação ===================
+def load_users():
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_users(users_dict):
+    with open(USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(users_dict, f, ensure_ascii=False, indent=2)
+
+USERS = load_users()  # carrega usuários salvos
+
+def registrar_acesso(label: str):
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} - {label}\n")
+    except Exception:
+        pass
+
+def is_visitante():
+    return bool(st.session_state.get("usuario")) and str(st.session_state.get("usuario")).startswith("visitante-")
+
+# =============== Session state inicial ===================
 if "logado" not in st.session_state:
     st.session_state.logado = False
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
-
-if "produtos" not in st.session_state or "clientes" not in st.session_state or "vendas" not in st.session_state:
+if "produtos" not in st.session_state:
     p, c, v = load_db()
     st.session_state.produtos = p
     st.session_state.clientes = c
     st.session_state.vendas = v
-
 if "carrinho" not in st.session_state:
     st.session_state.carrinho = []
 if "carrinho_foto" not in st.session_state:
@@ -91,7 +101,7 @@ if "filtro_cliente" not in st.session_state:
 if "menu" not in st.session_state:
     st.session_state.menu = "Resumo"
 
-# =============== Helpers ===============
+# =============== Helpers ===================
 def total_cliente(nome: str) -> float:
     vendas = st.session_state.clientes.get(nome, [])
     return sum(v["preco"] * v["quantidade"] for v in vendas)
@@ -159,7 +169,14 @@ def adicionar_produto_manual(codigo, nome, preco_unitario):
         cod = int(codigo)
     except:
         raise ValueError("Código inválido")
-    st.session_state
+    st.session_state.produtos[cod] = {"nome": nome.strip(), "preco": float(preco_unitario)}
+    save_db()
+
+def zerar_todas_vendas():
+    for k in list(st.session_state.clientes.keys()):
+        st.session_state.clientes[k] = []
+    st.session_state.vendas = []
+    save_db()
 # ==========================
 # ==========================
 # ==========================
