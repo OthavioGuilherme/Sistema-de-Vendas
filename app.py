@@ -161,19 +161,20 @@ def adicionar_produto_manual(codigo, nome, preco_unitario):
         raise ValueError("Código inválido")
     st.session_state
 # ==========================
-# Parte 2 - Telas principais e funcionalidades
+# ==========================
+# Parte 2 - Telas principais
 # ==========================
 
+import pytesseract
+from PIL import Image, ImageEnhance, ImageFilter
+import re
 import streamlit as st
 from datetime import datetime
-from PIL import Image, ImageEnhance, ImageFilter
-import pytesseract
-import re
 
 # ---------------- Tela Resumo ----------------
 def tela_resumo():
     st.title("📊 Resumo")
-    vendas = st.session_state.vendas
+    vendas = st.session_state.db.get("vendas", [])
     if not vendas:
         st.info("Nenhuma venda registrada ainda.")
         return
@@ -184,147 +185,176 @@ def tela_resumo():
     for v in vendas:
         with st.expander(f"{v['cliente']} - {v['data']} - R$ {v['total']:.2f}"):
             for p in v["produtos"]:
-                st.write(f"- {p['nome']} (Ref {p['codigo']}): R$ {p['preco']:.2f}")
+                st.write(f"- {p['nome']} (Ref {p['codigo']}): {p['preco']:.2f}")
 
+# ---------------- Tela Registrar Venda Manual ----------------
+def tela_registrar_venda():
+    st.title("🛒 Registrar Venda (Manual)")
 
-# ---------------- Tela Registrar Venda por Foto ----------------
-def tela_registrar_venda_foto():
-    st.title("📷 Registrar Venda (Por Foto)")
+    clientes = list(st.session_state.db.get("clientes", {}).keys())
+    cliente = st.selectbox("Selecione o cliente", options=clientes)
 
-    # Escolher cliente ou cadastrar novo
-    clientes = list(st.session_state.clientes.keys())
-    novo_cliente = st.text_input("Novo cliente (opcional)")
-    cliente = st.selectbox("Selecione o cliente", options=clientes) if clientes else None
+    carrinho = st.session_state.get("carrinho", [])
 
-    if novo_cliente.strip():
-        if novo_cliente not in st.session_state.clientes:
-            st.session_state.clientes[novo_cliente] = []
-            save_db()
-            cliente = novo_cliente
-            st.success(f"Cliente '{novo_cliente}' cadastrado!")
+    produto = st.selectbox("Selecione o produto", options=st.session_state.db.get("produtos", []))
+    if st.button("Adicionar ao carrinho"):
+        carrinho.append(produto)
+        st.session_state.carrinho = carrinho
 
-    if not cliente:
-        st.info("Cadastre ou selecione um cliente para continuar.")
-        return
-
-    st.subheader("Adicionar fotos do produto")
-    uploaded_files = st.file_uploader(
-        "Envie até 10 fotos da etiqueta do produto",
-        type=["jpg", "jpeg", "png"],
-        accept_multiple_files=True
-    )
-
-    if uploaded_files:
-        if len(uploaded_files) > 10:
-            st.warning("Você só pode enviar até 10 fotos por vez.")
-            return
-
-        for idx, file in enumerate(uploaded_files):
-            st.markdown(f"**Foto {idx + 1}**")
-            img = Image.open(file)
-            st.image(img, width=200)
-
-            # Pré-processamento OCR
-            img_proc = img.convert("L").filter(ImageFilter.SHARPEN)
-            img_proc = ImageEnhance.Contrast(img_proc).enhance(2)
-            texto = pytesseract.image_to_string(img_proc, lang="por")
-            st.text_area("Texto detectado (OCR):", texto, height=120)
-
-            # Extrair código
-            ref_match = re.search(r"Ref\.?\s*(\d+)", texto, re.IGNORECASE)
-            codigo = ref_match.group(1) if ref_match else ""
-
-            # Extrair nome (somente letras, ignorando números isolados e tamanho)
-            linhas = texto.splitlines()
-            nome_linhas = [l.strip() for l in linhas if l.strip() and any(c.isalpha() for c in l)]
-            nome = " ".join(nome_linhas)
-
-            # Extrair preço a partir do código tipo Sxxxx -> xx,xx
-            preco_match = re.search(r"S(\d{3,})", texto)
-            preco = ""
-            if preco_match:
-                preco_num = preco_match.group(1)
-                preco = f"{preco_num[:-2]},{preco_num[-2:]}"
-
-            # Checar se produto já existe
-            produto_existe = False
-            if codigo:
-                try:
-                    cod_int = int(codigo)
-                    if cod_int in st.session_state.produtos:
-                        produto_existe = True
-                        nome = st.session_state.produtos[cod_int]["nome"]
-                        preco = f"{st.session_state.produtos[cod_int]['preco']:.2f}"
-                except:
-                    pass
-
-            # Campos editáveis
-            codigo_input = st.text_input("Código do produto", value=codigo, key=f"cod_{idx}")
-            nome_input = st.text_input("Nome do produto", value=nome, key=f"nome_{idx}")
-            preco_input = st.text_input("Preço (R$)", value=preco, key=f"preco_{idx}")
-
-            if not produto_existe:
-                st.info("Produto não cadastrado. Você pode cadastrar agora.")
-
-            if st.button("Adicionar produto ao carrinho", key=f"add_{idx}"):
-                try:
-                    preco_float = float(preco_input.replace(",", "."))
-                except:
-                    st.error("Preço inválido. Corrija antes de continuar.")
-                    continue
-
-                # Se produto não existir, cadastrar
-                try:
-                    cod_int = int(codigo_input)
-                except:
-                    st.error("Código inválido")
-                    continue
-
-                if cod_int not in st.session_state.produtos:
-                    st.session_state.produtos[cod_int] = {"nome": nome_input, "preco": preco_float}
-                    save_db()
-                    st.success(f"Produto '{nome_input}' cadastrado!")
-
-                # Adicionar ao carrinho
-                carrinho = st.session_state.get("carrinho_foto", [])
-                carrinho.append({"codigo": cod_int, "nome": nome_input, "preco": preco_float})
-                st.session_state.carrinho_foto = carrinho
-                st.success(f"Produto '{nome_input}' adicionado ao carrinho!")
-
-
-    # Mostrar carrinho e total
-    st.subheader("Carrinho (Foto)")
-    carrinho = st.session_state.get("carrinho_foto", [])
+    st.subheader("Carrinho")
     if carrinho:
         for i, p in enumerate(carrinho):
             col1, col2 = st.columns([3, 1])
             col1.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
-            if col2.button("Remover", key=f"rem_foto{i}"):
+            if col2.button("Remover", key=f"rem{i}"):
                 carrinho.pop(i)
-                st.session_state.carrinho_foto = carrinho
+                st.session_state.carrinho = carrinho
                 st.rerun()
 
         total = sum(p["preco"] for p in carrinho)
         st.write(f"**Total: R$ {total:.2f}**")
 
-        if st.button("Finalizar venda por foto"):
+        if st.button("Finalizar venda"):
             nova_venda = {
                 "cliente": cliente,
                 "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                 "produtos": carrinho.copy(),
                 "total": total
             }
-            st.session_state.vendas.append(nova_venda)
-            st.session_state.carrinho_foto = []
+            st.session_state.db["vendas"].append(nova_venda)
             save_db()
+            st.session_state.carrinho = []
             st.success("Venda registrada com sucesso!")
             st.rerun()
+    else:
+        st.info("Nenhum produto no carrinho ainda.")
 
+# ---------------- Tela Registrar Venda por Foto ----------------
+def tela_registrar_venda_foto():
+    st.title("📷 Registrar Venda (Por Foto)")
+
+    # Seleção ou cadastro do cliente
+    clientes = list(st.session_state.db.get("clientes", {}).keys())
+    opcao_cliente = st.radio("Cliente", ["Selecionar existente", "Cadastrar novo"])
+    if opcao_cliente == "Selecionar existente":
+        if clientes:
+            cliente = st.selectbox("Selecione o cliente", options=clientes, key="foto_cliente")
+        else:
+            st.warning("Nenhum cliente cadastrado. Cadastre um novo.")
+            opcao_cliente = "Cadastrar novo"
+    if opcao_cliente == "Cadastrar novo":
+        cliente_novo = st.text_input("Nome do novo cliente", key="novo_cliente_foto")
+        if st.button("Cadastrar cliente"):
+            if cliente_novo.strip() == "":
+                st.error("Informe um nome válido!")
+                return
+            st.session_state.db.setdefault("clientes", {})[cliente_novo] = []
+            save_db()
+            st.success("Cliente cadastrado!")
+            cliente = cliente_novo
+        else:
+            return
+
+    # Upload de múltiplas fotos
+    uploaded_files = st.file_uploader(
+        "Envie até 10 fotos das etiquetas do produto", type=["jpg", "jpeg", "png"], accept_multiple_files=True
+    )
+    if uploaded_files:
+        if len(uploaded_files) > 10:
+            st.warning("Você pode enviar no máximo 10 fotos.")
+            uploaded_files = uploaded_files[:10]
+
+        carrinho_foto = st.session_state.get("carrinho_foto", [])
+
+        for i, uploaded_file in enumerate(uploaded_files):
+            st.markdown(f"**Foto {i+1}**")
+            img = Image.open(uploaded_file)
+            st.image(img, width=200)
+
+            # Pré-processamento
+            img_proc = img.convert("L")
+            img_proc = img_proc.filter(ImageFilter.SHARPEN)
+            img_proc = ImageEnhance.Contrast(img_proc).enhance(2)
+
+            # OCR com verificação de erro
+            try:
+                texto = pytesseract.image_to_string(img_proc, lang="por")
+            except Exception as e:
+                st.error(f"Erro OCR na foto {i+1}: {e}")
+                continue
+
+            st.text_area("Texto detectado (OCR):", texto, height=100)
+
+            # Extração de informações
+            ref_match = re.search(r"Ref\.?\s*(\d+)", texto, re.IGNORECASE)
+            codigo = ref_match.group(1) if ref_match else ""
+
+            preco_match = re.search(r"(\d{1,3}[.,]\d{2})", texto)
+            preco = preco_match.group(1).replace(",", ".") if preco_match else ""
+
+            nome_match = re.search(r"(SOUTIEN.*|CALCINHA.*|CAMISE.*|PRODUTO.*)", texto, re.IGNORECASE)
+            nome = nome_match.group(0).strip() if nome_match else ""
+
+            st.write(f"**Leitura extraída:** Código: {codigo}, Nome: {nome}, Preço: {preco}")
+
+            # Apenas produtos cadastrados
+            produtos_cadastrados = st.session_state.db.get("produtos", {})
+            if codigo and codigo in map(str, produtos_cadastrados.keys()):
+                st.success("Produto reconhecido no cadastro.")
+            else:
+                st.warning("Produto não cadastrado. Ajuste os dados antes de adicionar.")
+
+            # Campos editáveis
+            codigo = st.text_input(f"Código do produto (Foto {i+1})", value=codigo, key=f"cod_foto{i}")
+            nome = st.text_input(f"Nome do produto (Foto {i+1})", value=nome, key=f"nome_foto{i}")
+            preco = st.text_input(f"Preço (R$) (Foto {i+1})", value=preco, key=f"preco_foto{i}")
+
+            if st.button(f"Adicionar produto da foto {i+1}"):
+                try:
+                    preco_float = float(preco)
+                except:
+                    st.error("Preço inválido. Corrija antes de continuar.")
+                    continue
+
+                produto = {"codigo": codigo, "nome": nome, "preco": preco_float}
+                carrinho_foto.append(produto)
+                st.session_state.carrinho_foto = carrinho_foto
+                st.success("Produto adicionado ao carrinho!")
+
+    # Mostrar carrinho final
+    st.subheader("Carrinho (Foto)")
+    carrinho_foto = st.session_state.get("carrinho_foto", [])
+    if carrinho_foto:
+        for i, p in enumerate(carrinho_foto):
+            col1, col2 = st.columns([3, 1])
+            col1.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
+            if col2.button("Remover", key=f"rem_foto{i}"):
+                carrinho_foto.pop(i)
+                st.session_state.carrinho_foto = carrinho_foto
+                st.rerun()
+
+        total = sum(p["preco"] for p in carrinho_foto)
+        st.write(f"**Total: R$ {total:.2f}**")
+
+        if st.button("Finalizar venda por foto"):
+            nova_venda = {
+                "cliente": cliente,
+                "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "produtos": carrinho_foto.copy(),
+                "total": total
+            }
+            st.session_state.db.setdefault("vendas", []).append(nova_venda)
+            save_db()
+            st.session_state.carrinho_foto = []
+            st.success("Venda registrada com sucesso!")
+            st.rerun()
+    else:
+        st.info("Nenhum produto no carrinho ainda.")
 
 # ---------------- Tela Clientes ----------------
 def tela_clientes():
     st.title("👥 Clientes")
-    clientes = st.session_state.clientes
+    clientes = st.session_state.db.get("clientes", {})
 
     novo_cliente = st.text_input("Adicionar novo cliente")
     if st.button("Adicionar cliente"):
@@ -350,11 +380,10 @@ def tela_clientes():
                 st.warning("Cliente removido.")
                 st.rerun()
 
-
 # ---------------- Tela Produtos ----------------
 def tela_produtos():
     st.title("📦 Produtos")
-    produtos = st.session_state.produtos
+    produtos = st.session_state.db.get("produtos", {})
 
     codigo = st.text_input("Código do produto")
     nome = st.text_input("Nome do produto")
@@ -362,12 +391,7 @@ def tela_produtos():
 
     if st.button("Adicionar produto"):
         if codigo and nome and preco > 0:
-            try:
-                cod_int = int(codigo)
-            except:
-                st.error("Código inválido")
-                return
-            produtos[cod_int] = {"nome": nome, "preco": preco}
+            produtos[int(codigo)] = {"nome": nome, "preco": preco}
             save_db()
             st.success("Produto adicionado.")
             st.rerun()
@@ -375,11 +399,10 @@ def tela_produtos():
     for cod, p in produtos.items():
         st.write(f"{p['nome']} (Ref {cod}) - R$ {p['preco']:.2f}")
 
-
 # ---------------- Tela Relatórios ----------------
 def tela_relatorios():
     st.title("📑 Relatórios")
-    vendas = st.session_state.vendas
+    vendas = st.session_state.db.get("vendas", [])
     if not vendas:
         st.info("Nenhuma venda registrada.")
         return
@@ -387,15 +410,14 @@ def tela_relatorios():
     for v in vendas:
         st.write(f"{v['cliente']} - {v['data']} - R$ {v['total']:.2f}")
 
-
 # ---------------- Tela Acessos ----------------
 def tela_acessos():
     st.title("🔐 Acessos")
     try:
-        with open("acessos.log", "r") as f:
+        with open(LOG_FILE, "r") as f:
             st.text(f.read())
-    except:
-        st.info("Nenhum acesso registrado ainda.")
+    except Exception:
+        st.warning("Não foi possível carregar o log de acessos.")
 # ==========================
 # Parte 3 - Barra lateral, login e roteamento
 # ==========================
