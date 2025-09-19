@@ -178,24 +178,16 @@ def zerar_todas_vendas():
     st.session_state.vendas = []
     save_db()
 # ==========================
-# ==========================
-# ==========================
-# Parte 2 - Telas principais
-# ==========================
-
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 import re
 from datetime import datetime
 import streamlit as st
 
-# Configurar caminho do tesseract (opcional, Streamlit Cloud normalmente já tem)
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
-
 # ---------------- Tela Resumo ----------------
 def tela_resumo():
     st.title("📊 Resumo")
-    vendas = st.session_state.db.get("vendas", [])
+    vendas = st.session_state.get("vendas", [])
     if not vendas:
         st.info("Nenhuma venda registrada ainda.")
         return
@@ -208,103 +200,213 @@ def tela_resumo():
             for p in v["produtos"]:
                 st.write(f"- {p['nome']} (Ref {p['codigo']}): R$ {p['preco']:.2f}")
 
-# ---------------- Tela Registrar Venda por Foto ----------------
-def tela_registrar_venda_foto():
-    st.title("📷 Registrar Venda (Por Foto)")
+# ---------------- Tela Registrar Venda Manual ----------------
+def tela_registrar_venda():
+    st.title("🛒 Registrar Venda (Manual)")
 
-    # Escolher cliente ou cadastrar novo
-    clientes = list(st.session_state.db.get("clientes", {}).keys())
-    cliente = st.selectbox("Selecione o cliente", options=clientes + ["Cadastrar novo cliente"])
-    
-    if cliente == "Cadastrar novo cliente":
-        novo_cliente = st.text_input("Digite o nome do novo cliente")
-        if st.button("Adicionar cliente"):
-            if novo_cliente.strip():
-                st.session_state.db["clientes"][novo_cliente] = []
-                st.success(f"Cliente '{novo_cliente}' adicionado!")
-                st.experimental_rerun()
+    clientes = list(st.session_state.get("clientes", {}).keys())
+    if not clientes:
+        st.warning("Não há clientes cadastrados. Cadastre um cliente primeiro.")
         return
 
-    # Upload de até 10 fotos
-    uploaded_files = st.file_uploader("Envie até 10 fotos das etiquetas", type=["jpg","jpeg","png"], accept_multiple_files=True)
-    if uploaded_files:
-        if len(uploaded_files) > 10:
-            st.warning("Máximo de 10 fotos permitido.")
-            return
+    cliente = st.selectbox("Selecione o cliente", options=clientes)
 
-        carrinho = st.session_state.get("carrinho_foto", [])
+    carrinho = st.session_state.get("carrinho", [])
 
-        for i, uploaded_file in enumerate(uploaded_files):
-            img = Image.open(uploaded_file)
+    produto_keys = list(st.session_state.get("produtos", {}).keys())
+    if not produto_keys:
+        st.warning("Não há produtos cadastrados. Cadastre um produto primeiro.")
+        return
 
-            # Pré-processamento da imagem
-            img_proc = img.convert("L")
-            img_proc = img_proc.filter(ImageFilter.SHARPEN)
-            img_proc = ImageEnhance.Contrast(img_proc).enhance(2)
+    produto_sel = st.selectbox(
+        "Selecione o produto",
+        options=[f"{cod} - {st.session_state['produtos'][cod]['nome']} (R$ {st.session_state['produtos'][cod]['preco']:.2f})" for cod in produto_keys]
+    )
 
-            # OCR com tratamento de erro
-            try:
-                texto = pytesseract.image_to_string(img_proc, lang="por")
-            except pytesseract.TesseractError:
-                st.error("OCR não disponível. Tesseract não instalado ou erro na leitura da imagem.")
-                return
+    cod_produto = int(produto_sel.split(" - ")[0])
+    produto = st.session_state["produtos"][cod_produto]
 
-            # Tentativa de extrair código e preço
-            ref_match = re.search(r"Ref\.?\s*(\d+)", texto, re.IGNORECASE)
-            codigo = ref_match.group(1) if ref_match else ""
+    if st.button("Adicionar ao carrinho"):
+        carrinho.append({"codigo": cod_produto, "nome": produto["nome"], "preco": produto["preco"]})
+        st.session_state.carrinho = carrinho
 
-            preco_match = re.search(r"(\d{1,3}[.,]?\d{2})", texto)
-            preco = preco_match.group(1).replace(",", ".") if preco_match else ""
-
-            nome_match = re.search(r"(SOUTIEN.*|CALCINHA.*|CAMISE.*|PRODUTO.*)", texto, re.IGNORECASE)
-            nome = nome_match.group(0).strip() if nome_match else ""
-
-            st.markdown(f"**Produto {i+1} detectado:**")
-            st.text_area("Texto OCR:", texto, height=120)
-            codigo = st.text_input("Código do produto", value=codigo, key=f"cod_{i}")
-            nome = st.text_input("Nome do produto", value=nome, key=f"nome_{i}")
-            preco = st.text_input("Preço (R$)", value=preco, key=f"preco_{i}")
-
-            if st.button(f"Adicionar produto {i+1} ao carrinho"):
-                try:
-                    preco_float = float(preco)
-                except:
-                    st.error("Preço inválido. Corrija antes de adicionar.")
-                    continue
-
-                produto = {"codigo": codigo, "nome": nome, "preco": preco_float}
-                carrinho.append(produto)
-                st.session_state.carrinho_foto = carrinho
-                st.success(f"Produto {nome} adicionado ao carrinho!")
-
-    # Exibir carrinho
-    st.subheader("Carrinho (Foto)")
-    carrinho = st.session_state.get("carrinho_foto", [])
+    st.subheader("Carrinho")
     if carrinho:
         for i, p in enumerate(carrinho):
-            col1, col2 = st.columns([4,1])
+            col1, col2 = st.columns([3, 1])
             col1.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
-            if col2.button("Remover", key=f"rem_foto{i}"):
+            if col2.button("Remover", key=f"rem_{i}"):
                 carrinho.pop(i)
-                st.session_state.carrinho_foto = carrinho
+                st.session_state.carrinho = carrinho
                 st.experimental_rerun()
 
         total = sum(p["preco"] for p in carrinho)
         st.write(f"**Total: R$ {total:.2f}**")
 
-        if st.button("Finalizar venda por foto"):
+        if st.button("Finalizar venda"):
             nova_venda = {
                 "cliente": cliente,
                 "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                 "produtos": carrinho.copy(),
                 "total": total
             }
-            st.session_state.db["vendas"].append(nova_venda)
+            st.session_state.vendas.append(nova_venda)
+            st.session_state.carrinho = []
+            st.success("Venda registrada com sucesso!")
+            st.experimental_rerun()
+    else:
+        st.info("Nenhum produto no carrinho ainda.")
+
+# ---------------- Tela Registrar Venda por Foto ----------------
+def tela_registrar_venda_foto():
+    st.title("📷 Registrar Venda (Por Foto)")
+
+    # Seleção ou cadastro do cliente
+    clientes = list(st.session_state.get("clientes", {}).keys())
+    novo_cliente = st.text_input("Novo cliente (opcional)")
+    if novo_cliente:
+        if novo_cliente not in st.session_state["clientes"]:
+            st.session_state["clientes"][novo_cliente] = []
+            st.success(f"Cliente '{novo_cliente}' cadastrado.")
+    cliente_sel = st.selectbox("Selecione o cliente", options=clientes + ([novo_cliente] if novo_cliente else []))
+
+    # Upload de até 10 fotos
+    uploaded_files = st.file_uploader("Envie até 10 fotos das etiquetas", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+    if uploaded_files:
+        if len(uploaded_files) > 10:
+            st.warning("O máximo permitido é 10 fotos.")
+            return
+
+        carrinho_foto = st.session_state.get("carrinho_foto", [])
+
+        for uploaded_file in uploaded_files:
+            img = Image.open(uploaded_file)
+            img_proc = img.convert("L")
+            img_proc = img_proc.filter(ImageFilter.SHARPEN)
+            img_proc = ImageEnhance.Contrast(img_proc).enhance(2)
+
+            texto = pytesseract.image_to_string(img_proc, lang="por")
+            st.text_area(f"Texto detectado ({uploaded_file.name}):", texto, height=150)
+
+            # Extrair código, nome e preço
+            ref_match = re.search(r"Ref\.?\s*(\d+)", texto, re.IGNORECASE)
+            codigo = int(ref_match.group(1)) if ref_match else None
+
+            preco_match = re.search(r"(\d{1,3}[.,]\d{2})", texto)
+            preco = float(preco_match.group(1).replace(",", ".")) if preco_match else None
+
+            nome_match = re.search(r"(SOUTIEN.*|CALCINHA.*|CAMISE.*|PRODUTO.*)", texto, re.IGNORECASE)
+            nome = nome_match.group(0).strip() if nome_match else ""
+
+            # Checar se código existe
+            if codigo in st.session_state["produtos"]:
+                produto_nome = st.session_state["produtos"][codigo]["nome"]
+                st.info(f"Produto cadastrado: {produto_nome} - R$ {st.session_state['produtos'][codigo]['preco']:.2f}")
+            else:
+                st.warning(f"Produto não cadastrado. Código: {codigo}")
+                novo_nome = st.text_input(f"Nome do produto para cadastrar (Código {codigo})", value=nome)
+                novo_preco = st.text_input(f"Preço do produto (R$) para cadastrar (Código {codigo})", value=preco if preco else "")
+                if st.button(f"Cadastrar produto {codigo}"):
+                    if novo_nome and novo_preco:
+                        st.session_state["produtos"][codigo] = {"nome": novo_nome, "preco": float(novo_preco)}
+                        st.success(f"Produto {novo_nome} cadastrado com sucesso.")
+
+            if codigo and preco:
+                carrinho_foto.append({"codigo": codigo, "nome": nome, "preco": preco})
+                st.session_state.carrinho_foto = carrinho_foto
+
+    # Mostrar carrinho
+    st.subheader("Carrinho (Foto)")
+    carrinho_foto = st.session_state.get("carrinho_foto", [])
+    if carrinho_foto:
+        for i, p in enumerate(carrinho_foto):
+            col1, col2 = st.columns([3, 1])
+            col1.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
+            if col2.button("Remover", key=f"rem_foto_{i}"):
+                carrinho_foto.pop(i)
+                st.session_state.carrinho_foto = carrinho_foto
+                st.experimental_rerun()
+
+        total = sum(p["preco"] for p in carrinho_foto)
+        st.write(f"**Total: R$ {total:.2f}**")
+
+        if st.button("Finalizar venda por foto"):
+            nova_venda = {
+                "cliente": cliente_sel,
+                "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "produtos": carrinho_foto.copy(),
+                "total": total
+            }
+            st.session_state.vendas.append(nova_venda)
             st.session_state.carrinho_foto = []
             st.success("Venda registrada com sucesso!")
             st.experimental_rerun()
     else:
         st.info("Nenhum produto no carrinho ainda.")
+
+# ---------------- Tela Clientes ----------------
+def tela_clientes():
+    st.title("👥 Clientes")
+    clientes = st.session_state.get("clientes", {})
+
+    novo_cliente = st.text_input("Adicionar novo cliente")
+    if st.button("Adicionar cliente"):
+        if novo_cliente and novo_cliente not in clientes:
+            clientes[novo_cliente] = []
+            st.success("Cliente adicionado.")
+            st.experimental_rerun()
+
+    for cliente in clientes.keys():
+        with st.expander(cliente):
+            col1, col2 = st.columns([1, 1])
+            if col1.button("Renomear", key=f"ren_{cliente}"):
+                novo_nome = st.text_input(f"Novo nome para {cliente}", key=f"in_ren_{cliente}")
+                if st.button("Salvar", key=f"salvar_{cliente}"):
+                    clientes[novo_nome] = clientes.pop(cliente)
+                    st.success("Cliente renomeado.")
+                    st.experimental_rerun()
+            if col2.button("Apagar", key=f"del_{cliente}"):
+                del clientes[cliente]
+                st.warning("Cliente removido.")
+                st.experimental_rerun()
+
+# ---------------- Tela Produtos ----------------
+def tela_produtos():
+    st.title("📦 Produtos")
+    produtos = st.session_state.get("produtos", {})
+
+    codigo = st.text_input("Código do produto")
+    nome = st.text_input("Nome do produto")
+    preco = st.number_input("Preço", min_value=0.0, format="%.2f")
+
+    if st.button("Adicionar produto"):
+        if codigo and nome and preco > 0:
+            produtos[int(codigo)] = {"nome": nome, "preco": preco}
+            st.success("Produto adicionado.")
+            st.experimental_rerun()
+
+    for cod, p in produtos.items():
+        st.write(f"{p['nome']} (Ref {cod}) - R$ {p['preco']:.2f}")
+
+# ---------------- Tela Relatórios ----------------
+def tela_relatorios():
+    st.title("📑 Relatórios")
+    vendas = st.session_state.get("vendas", [])
+    if not vendas:
+        st.info("Nenhuma venda registrada.")
+        return
+
+    for v in vendas:
+        st.write(f"{v['cliente']} - {v['data']} - R$ {v['total']:.2f}")
+
+# ---------------- Tela Acessos ----------------
+def tela_acessos():
+    st.title("🔐 Acessos")
+    try:
+        with open("acessos.log", "r", encoding="utf-8") as f:
+            st.text(f.read())
+    except:
+        st.info("Nenhum acesso registrado ainda.")
 # ==========================
 # Parte 3 - Barra lateral, login e roteamento
 # ==========================
