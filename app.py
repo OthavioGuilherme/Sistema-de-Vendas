@@ -285,14 +285,44 @@ def bloco_backup_sidebar():
 # ================== Menu lateral ==================
 def barra_lateral():
     st.sidebar.markdown(f"**Usuário:** {st.session_state['usuario']}")
-    opcoes = ["Resumo", "Upload PDF", "Clientes", "Produtos", "Relatórios", "Sair"]
+    st.sidebar.markdown("---")
+    
+    # Menu moderno
+    opcoes = {
+        "Resumo 📊": "Resumo",
+        "Upload PDF 🧾": "Upload PDF",
+        "Clientes 👥": "Clientes",
+        "Produtos 📦": "Produtos",
+        "Backup 🗂️": "Backup",
+        "Sair 🔒": "Sair"
+    }
+    
+    # Visitantes não veem Backup
+    if is_visitante():
+        del opcoes["Backup 🗂️"]
+
+    menu = st.sidebar.radio("Menu", list(opcoes.keys()), index=list(opcoes.keys()).index(st.session_state.get("menu", "Resumo 📊")))
+    st.session_state["menu"] = opcoes[menu]
+    
+    # Backup + Zerar vendas (apenas para usuários logados)
     if not is_visitante():
-        opcoes.insert(-1, "Backup")
-    idx_atual = opcoes.index(st.session_state.get("menu", "Resumo")) \
-        if st.session_state.get("menu") in opcoes else 0
-    menu = st.sidebar.radio("Menu", opcoes, index=idx_atual)
-    st.session_state["menu"] = menu
-    bloco_backup_sidebar()
+        st.sidebar.markdown("---")
+        st.sidebar.caption("⚙️ Configurações")
+        up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
+        if up is not None:
+            try:
+                data = json.load(up)
+                prods = {int(k): v for k, v in data.get("produtos", {}).items()}
+                clis = {k: v for k, v in data.get("clientes", {}).items()}
+                st.session_state["produtos"] = prods
+                st.session_state["clientes"] = clis
+                save_db()
+                st.sidebar.success("Backup restaurado!")
+                st.experimental_rerun()
+            except Exception as e:
+                st.sidebar.error(f"Falha ao restaurar: {e}")
+        if st.sidebar.button("🧹 Zerar vendas"):
+            zerar_vendas()
 # ================== Relatórios ==================
 def relatorio_geral():
     st.header("📋 Relatório Geral")
