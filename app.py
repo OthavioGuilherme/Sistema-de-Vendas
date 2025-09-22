@@ -5,7 +5,7 @@ import os
 import io
 import pdfplumber
 
-# ================== Configuração ==================
+##================== Configuração ==================
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
 USERS = {"othavio": "122008", "isabela": "122008"}
