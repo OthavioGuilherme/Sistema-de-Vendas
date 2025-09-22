@@ -383,8 +383,9 @@ def tela_clientes():
                             remover_venda(cliente, idx)
 
             st.markdown(f"**Total do cliente:** R$ {total:.2f}")
-
-# =================== Tela Produtos ===================
+            
+# ================= PARTE 3 ===========================
+# =================== Tela Produtos (continuação) ===================
 def tela_produtos():
     visitante = is_visitante()
     st.header("📦 Produtos")
@@ -428,22 +429,23 @@ def tela_produtos():
                                              key=f"pp_{cod}", disabled=visitante)
                 c1, c2 = st.columns(2)
                 with c1:
-                    if visitante:
-                        st.button("Salvar
-# =================== Continuação Tela Produtos ===================
-with c1:
-    if not visitante and st.button("Salvar alterações", key=f"save_prod_{cod}"):
-        st.session_state.produtos[cod]["nome"] = novo_nome.strip()
-        st.session_state.produtos[cod]["preco"] = float(novo_preco)
-        save_db()
-        st.success("Produto atualizado!")
-
-with c2:
-    if not visitante and st.button("Apagar produto", key=f"del_prod_{cod}"):
-        st.session_state.produtos.pop(cod)
-        save_db()
-        st.success("Produto apagado!")
-        st.experimental_rerun()
+                    if not visitante:
+                        if st.button("Salvar", key=f"s_{cod}"):
+                            st.session_state.produtos[cod]["nome"] = novo_nome.strip()
+                            st.session_state.produtos[cod]["preco"] = float(novo_preco)
+                            save_db()
+                            st.success("Produto atualizado.")
+                    else:
+                        st.button("Salvar", key=f"s_{cod}", disabled=True)
+                with c2:
+                    if not visitante:
+                        if st.button("Apagar", key=f"d_{cod}"):
+                            st.session_state.produtos.pop(cod, None)
+                            save_db()
+                            st.success("Produto apagado.")
+                            st.experimental_rerun()
+                    else:
+                        st.button("Apagar", key=f"d_{cod}", disabled=True)
 
 # =================== Loop principal do app ===================
 def main():
@@ -453,8 +455,6 @@ def main():
         st.session_state.usuario = None
     if "carrinho" not in st.session_state:
         st.session_state.carrinho = []
-    if "carrinho_undo" not in st.session_state:
-        st.session_state.carrinho_undo = []
     if "filtro_cliente" not in st.session_state:
         st.session_state.filtro_cliente = ""
 
@@ -462,22 +462,8 @@ def main():
         tela_login()
         return
 
-    menu = ["Resumo", "Registrar Venda", "Clientes", "Produtos", "Sair"]
-    escolha = st.sidebar.selectbox(f"Olá, {st.session_state.usuario}!", menu)
-
-    if escolha == "Resumo":
-        tela_resumo()
-    elif escolha == "Registrar Venda":
-        tela_registrar_venda()
-    elif escolha == "Clientes":
-        tela_clientes()
-    elif escolha == "Produtos":
-        tela_produtos()
-    elif escolha == "Sair":
-        st.session_state.logado = False
-        st.session_state.usuario = None
-        st.session_state.carrinho = []
-        st.experimental_rerun()
+    barra_lateral()
+    roteador()
 
 if __name__ == "__main__":
     main()
