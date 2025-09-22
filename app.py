@@ -43,9 +43,11 @@ if "menu" not in st.session_state:
 
 # ================== Helpers ==================
 def is_visitante():
+    """Verifica se o usuário atual é visitante"""
     return st.session_state["usuario"] and st.session_state["usuario"].startswith("visitante-")
 
 def save_db():
+    """Salva produtos e clientes no arquivo JSON"""
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f:
             json.dump({
@@ -56,6 +58,7 @@ def save_db():
         st.warning(f"Falha ao salvar DB: {e}")
 
 def load_db():
+    """Carrega produtos e clientes do arquivo JSON"""
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
@@ -63,9 +66,16 @@ def load_db():
             prods = {int(k): v for k, v in data.get("produtos", {}).items()}
             clis = {k: v for k, v in data.get("clientes", {}).items()}
             return prods, clis
-        except:
-            pass
-    return {}, st.session_state["clientes"]  # produtos vazio, clientes mantidos
+        except Exception as e:
+            st.warning(f"Falha ao carregar DB: {e}")
+    return {}, st.session_state["clientes"]
+
+def zerar_vendas():
+    """Zera todas as vendas dos clientes"""
+    for cliente in st.session_state["clientes"]:
+        st.session_state["clientes"][cliente] = []
+    save_db()
+    st.success("Todas as vendas foram zeradas!")
 
 # ================== Inicialização DB ==================
 st.session_state["produtos"], st.session_state["clientes"] = load_db()
