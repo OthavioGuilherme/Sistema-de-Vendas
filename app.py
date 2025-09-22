@@ -1,4 +1,3 @@
-# ========================= app.py - PARTE 1 =========================
 import streamlit as st
 from datetime import datetime
 import json
@@ -6,43 +5,24 @@ import os
 import io
 import pdfplumber
 
-# =============== Configuração da página ===============
+# ================== Configuração ==================
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# =============== Usuários e autenticação ===============
-USERS = {
-    "othavio": "122008",
-    "isabela": "122008",
-}
-
+USERS = {"othavio": "122008", "isabela": "122008"}
 LOG_FILE = "acessos.log"
-DB_FILE  = "db.json"
+DB_FILE = "db.json"
 
+# ================== Registro de acesso ==================
 def registrar_acesso(usuario: str):
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.now().isoformat()} - {usuario}\n")
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} - {usuario}\n")
+    except:
+        pass
 
-# =============== Controle de login ===============
+# ================== Session state ==================
 if "usuario" not in st.session_state:
     st.session_state["usuario"] = None
-
-def login():
-    st.title("🔐 Login")
-    usuario = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
-        if usuario in USERS and USERS[usuario] == senha:
-            st.session_state["usuario"] = usuario
-            registrar_acesso(usuario)
-            st.experimental_rerun()
-        else:
-            st.error("Usuário ou senha incorretos")
-
-if st.session_state["usuario"] is None:
-    login()
-    st.stop()
-
-# ================== Dados iniciais ==================
 if "clientes" not in st.session_state:
     st.session_state.clientes = {
         "Tabata": [],
@@ -52,12 +32,30 @@ if "clientes" not in st.session_state:
         "Elan": [],
         "Claudinha": [],
     }
-
 if "produtos" not in st.session_state:
-    st.session_state.produtos = {}  # produtos começarão vazios
-
+    st.session_state.produtos = {}
 if "vendas" not in st.session_state:
     st.session_state.vendas = {c: [] for c in st.session_state.clientes.keys()}
+
+# ================== Tela de Login ==================
+def login():
+    st.title("🔐 Login")
+    usuario = st.text_input("Usuário")
+    senha = st.text_input("Senha", type="password")
+    entrar = st.button("Entrar")
+    
+    if entrar:
+        if usuario in USERS and USERS[usuario] == senha:
+            st.session_state["usuario"] = usuario
+            registrar_acesso(usuario)
+            st.experimental_rerun()  # agora dentro do botão, seguro
+        else:
+            st.error("Usuário ou senha incorretos")
+
+# ================== Execução do login ==================
+if st.session_state["usuario"] is None:
+    login()
+    st.stop()
     
 # ========================= app.py - PARTE 2 =========================
 
