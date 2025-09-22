@@ -133,21 +133,18 @@ def adicionar_produto_manual(cod, nome, preco):
     st.success(f"Produto {nome} adicionado/atualizado!")
 
 # ================== Telas ==================
+# ================== Telas ==================
+
 def tela_resumo():
     st.header("📊 Resumo de Vendas")
     total_geral = 0
-    for c, vendas in st.session_state["clientes"].items():
-        total_cliente = sum(v.get("preco",0)*v.get("quantidade",1) for v in vendas)
+    for cliente, vendas in st.session_state["clientes"].items():
+        total_cliente = sum(v.get("preco", 0) * v.get("quantidade", 1) for v in vendas)
         total_geral += total_cliente
-        st.write(f"- {c}: R$ {total_cliente:.2f}")
-    st.markdown(f"**💰 Total Geral: R$ {total_geral:.2f}**")
-    comissao = total_geral * 0.25  # exemplo 25%
-    st.markdown(f"**📈 Comissão: R$ {comissao:.2f}**")
-    if st.button("Zerar todas as vendas"):
-        for c in st.session_state["clientes"]:
-            st.session_state["clientes"][c] = []
-        save_db()
-        st.success("Vendas zeradas!")
+    comissao = total_geral * 0.25  # exemplo de comissão 25%
+    st.metric("💰 Total de Vendas", f"R$ {total_geral:.2f}")
+    st.metric("📈 Comissão (25%)", f"R$ {comissao:.2f}")
+    st.info("Resumo geral das vendas até o momento.")
 
 def tela_pdf():
     st.header("📄 Importar Estoque via Nota Fiscal (PDF)")
@@ -162,9 +159,9 @@ def tela_pdf():
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
-    sub = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True)
-    
-    if sub == "Adicionar":
+    acao = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True)
+
+    if acao == "Adicionar":
         if visitante:
             st.info("🔒 Visitantes não podem adicionar produtos.")
             return
@@ -180,19 +177,20 @@ def tela_produtos():
                 adicionar_produto_manual(cod, nome, preco)
     else:
         termo = st.text_input("Buscar por nome ou código").lower()
+        st.subheader("Lista de Produtos")
         for cod, dados in sorted(st.session_state["produtos"].items(), key=lambda x: x[1]["nome"].lower()):
-            if termo in str(cod) or termo in dados["nome"].lower() or termo=="":
+            if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
 
 def tela_clientes():
     st.header("👥 Clientes")
     visitante = is_visitante()
     aba = st.radio("Ação", ["Consultar cliente", "Cadastrar cliente"], horizontal=True)
-    
+
     if visitante and aba == "Cadastrar cliente":
         st.info("🔒 Visitantes não podem cadastrar clientes.")
         return
-    
+
     if aba == "Cadastrar cliente":
         nome = st.text_input("Nome do cliente")
         if st.button("Salvar cliente"):
@@ -205,26 +203,42 @@ def tela_clientes():
                 save_db()
                 st.success(f"Cliente {nome} cadastrado!")
         return
-    
-    # Consultar cliente e adicionar produto
+
+    # Consultar cliente
     filtro = st.text_input("Buscar cliente (2+ letras)").lower()
     matches = [c for c in st.session_state["clientes"] if filtro in c.lower()]
     cliente = st.selectbox("Selecione o cliente", matches) if matches else None
-    
+
     if cliente:
         st.subheader(f"{cliente}")
-        st.info("Vendas estão zeradas neste sistema simplificado.")
-        st.write("Adicionar produto a este cliente:")
-        cod = st.number_input("Código", min_value=1, step=1, key="cod_cliente")
-        qtd = st.number_input("Quantidade", min_value=1, step=1, key="qtd_cliente")
-        if cod in st.session_state["produtos"]:
-            if st.button("Adicionar ao cliente", key="btn_add_cliente"):
-                prod = st.session_state["produtos"][cod]
-                st.session_state["clientes"][cliente].append({"codigo": cod, "nome": prod["nome"], "preco": prod["preco"], "quantidade": qtd})
-                save_db()
-                st.success(f"{qtd}x {prod['nome']} adicionados a {cliente}!")
+        # Lista de vendas
+        vendas = st.session_state["clientes"][cliente]
+        if vendas:
+            st.write("Vendas registradas:")
+            for v in vendas:
+                st.write(f"- {v['quantidade']}x {v['nome']} (R$ {v['preco']:.2f})")
         else:
-            st.warning("Código de produto não encontrado.")
+            st.info("Nenhuma venda registrada ainda.")
+
+        # Registrar venda
+        st.markdown("### ➕ Registrar Venda")
+        produtos_disponiveis = st.session_state["produtos"]
+        cod_input = st.text_input("Digite o código do produto", "")
+        sugestoes = [str(c) for c in produtos_disponiveis if str(c).startswith(cod_input)]
+        if sugestoes:
+            st.write("Sugestões de código:", ", ".join(sugestoes))
+
+        quantidade = st.number_input("Quantidade", min_value=1, step=1)
+        if st.button("Registrar venda"):
+            if cod_input.isdigit() and int(cod_input) in produtos_disponiveis:
+                cod_prod = int(cod_input)
+                produto = produtos_disponiveis[cod_prod]
+                venda = {"nome": produto["nome"], "preco": produto["preco"], "quantidade": quantidade}
+                st.session_state["clientes"][cliente].append(venda)
+                save_db()
+                st.success(f"Venda registrada: {quantidade}x {produto['nome']}")
+            else:
+                st.error("Código inválido ou não cadastrado.")
 # ================== Menu lateral moderno ==================
 def bloco_backup_sidebar():
     st.sidebar.markdown("---")
