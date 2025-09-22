@@ -70,6 +70,7 @@ def load_db():
 # ================== Inicialização DB ==================
 st.session_state["produtos"], st.session_state["clientes"] = load_db()
 # ================== Login ==================
+# ================== Login ==================
 def login():
     st.title("🔐 Login")
     escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
@@ -82,10 +83,9 @@ def login():
                 st.session_state["usuario"] = usuario
                 registrar_acesso(f"login-usuario:{usuario}")
                 st.success(f"Bem-vindo(a), {usuario}!")
-                return True
+                st.stop()  # interrompe aqui e reinicia o app com o usuário logado
             else:
                 st.error("Usuário ou senha incorretos.")
-                return False
     else:
         nome = st.text_input("Digite seu nome para entrar como visitante")
         if st.button("Entrar como visitante"):
@@ -93,11 +93,9 @@ def login():
                 st.session_state["usuario"] = f"visitante-{nome.strip()}"
                 registrar_acesso(f"login-visitante:{nome.strip()}")
                 st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
-                return True
+                st.stop()  # interrompe aqui e reinicia o app com o visitante logado
             else:
                 st.warning("Por favor, digite um nome.")
-                return False
-    return False
 
 # ================== Tela de Resumo ==================
 def tela_resumo():
