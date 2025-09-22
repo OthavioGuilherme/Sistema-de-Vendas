@@ -214,188 +214,93 @@ def tela_produtos():
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
 
 # ================== PARTE 3 ==================
-# ================== Clientes ==================
+# ====================
+# PARTE 3 - NAVEGAÇÃO E RELATÓRIOS
+# ====================
+
+import streamlit as st
+
+# Função para tela de clientes
 def tela_clientes():
-    st.header("👥 Clientes")
-    visitante = is_visitante()
-    aba = st.radio("Ação", ["Consultar cliente", "Cadastrar cliente"], horizontal=True)
+    st.header("👫 Clientes")
+    if "clientes" not in st.session_state:
+        st.session_state["clientes"] = {}
 
-    # Bloquear cadastro de cliente para visitante
-    if visitante and aba == "Cadastrar cliente":
-        st.info("🔒 Visitantes não podem cadastrar clientes.")
+    with st.form("form_cliente"):
+        nome = st.text_input("Nome do Cliente")
+        if st.form_submit_button("Cadastrar"):
+            if nome:
+                st.session_state["clientes"][nome] = []
+                st.success(f"Cliente {nome} cadastrado com sucesso!")
+
+    st.subheader("Lista de Clientes")
+    for cliente in list(st.session_state["clientes"].keys()):
+        col1, col2 = st.columns([3,1])
+        with col1:
+            st.write(cliente)
+        with col2:
+            if st.button(f"Apagar {cliente}"):
+                del st.session_state["clientes"][cliente]
+                st.success(f"Cliente {cliente} removido!")
+                st.rerun()
+
+# Função para tela de produtos
+def tela_produtos():
+    st.header("📦 Produtos")
+    st.info("Aqui entra o cadastro de produtos (já feito na Parte 2).")
+
+# Função para tela de vendas
+def tela_vendas():
+    st.header("💰 Vendas")
+    if st.session_state.get("usuario") == "visitante":
+        st.warning("Visitante não pode registrar vendas.")
         return
 
-    if aba == "Cadastrar cliente":
-        nome = st.text_input("Nome do cliente", key="nome_cliente")
-        if st.button("Salvar cliente"):
-            if not nome.strip():
-                st.warning("Informe um nome válido.")
-            elif nome in st.session_state["clientes"]:
-                st.warning("Cliente já existe.")
-            else:
-                st.session_state["clientes"][nome.strip()] = []
-                save_db()
-                st.success(f"Cliente {nome} cadastrado!")
+    st.info("Aqui entra a tela de vendas (já feita na Parte 2).")
+
+# Função para tela de relatórios
+def tela_relatorios():
+    st.header("📊 Relatórios")
+
+    if st.session_state.get("usuario") == "visitante":
+        st.warning("Visitante não pode ver os valores de vendas e comissão.")
+        if "clientes" in st.session_state:
+            for cliente, vendas in st.session_state["clientes"].items():
+                st.write(f"Cliente: {cliente}")
+                for v in vendas:
+                    st.write(f"- {v['nome']} x {v['quantidade']} (??? cada)")
         return
 
-    # Consultar clientes
-    filtro = st.text_input("Buscar cliente (2+ letras)", key="buscar_cliente").lower()
-    matches = [c for c in st.session_state["clientes"] if filtro in c.lower()]
-    cliente = st.selectbox("Selecione o cliente", matches) if matches else None
+    st.info("Aqui entra a tela de relatórios (já feita na Parte 2).")
 
-    if cliente:
-        st.subheader(f"{cliente}")
-        vendas = st.session_state["clientes"].get(cliente, [])
+# Menu no topo
+def menu_topo():
+    st.markdown("## 🛒 Sistema de Vendas")
 
-        # ➕ Adicionar Venda
-        st.markdown("### ➕ Adicionar Venda")
-        if visitante:
-            st.info("🔒 Visitantes não podem adicionar vendas.")
-        else:
-            produto_input = st.text_input("Digite código ou nome do produto", key=f"venda_produto_{cliente}")
-            opcoes_produtos = [
-                f"{cod} - {p['nome']}" for cod, p in st.session_state["produtos"].items()
-                if produto_input.lower() in str(cod) or produto_input.lower() in p["nome"].lower()
-            ]
-            produto_selecionado = st.selectbox("Escolha o produto", opcoes_produtos, key=f"select_venda_produto_{cliente}") if opcoes_produtos else None
-            quantidade = st.number_input("Quantidade", min_value=1, step=1, key=f"quantidade_venda_{cliente}")
-            if st.button("Adicionar venda", key=f"btn_add_venda_{cliente}"):
-                if produto_selecionado:
-                    cod = int(produto_selecionado.split(" - ")[0])
-                    p = st.session_state["produtos"][cod]
-                    vendas.append({"cod": cod, "nome": p["nome"], "preco": p["preco"], "quantidade": quantidade})
-                    st.session_state["clientes"][cliente] = vendas
-                    save_db()
-                    st.success(f"Venda adicionada ao cliente {cliente}!")
+    escolha = st.radio(
+        "Navegação:",
+        ["Clientes 👫", "Produtos 📦", "Vendas 💰", "Relatórios 📊", "Sair 🚪"],
+        horizontal=True
+    )
 
-        # 📝 Vendas do Cliente
-        st.markdown("### 📝 Vendas do Cliente")
-        if not vendas:
-            st.info("Nenhuma venda registrada.")
-        for idx, v in enumerate(vendas):
-            col1, col2, col3 = st.columns([5,2,2])
-            cod = v.get("cod")
-            nome = v.get("nome", "???")
-            quantidade = v.get("quantidade", 0)
-            preco = v.get("preco", 0.0)
-            valor_exibir = f"R$ {preco:.2f}" if not visitante else "R$ *****"
-
-            linha_exibir = f"{nome} x {quantidade} ({valor_exibir} cada)" if cod is None else f"{cod} - {nome} x {quantidade} ({valor_exibir} cada)"
-            col1.write(linha_exibir)
-
-            # Bloquear edição e exclusão para visitante
-            if visitante:
-                col2.button("Apagar", key=f"apagar_{cliente}_{idx}", disabled=True)
-                col3.number_input("Editar Qtde", min_value=1, value=quantidade, key=f"editar_{cliente}_{idx}", disabled=True)
-                col3.button("Salvar", key=f"salvar_{cliente}_{idx}", disabled=True)
-            else:
-                if col2.button("Apagar", key=f"apagar_{cliente}_{idx}"):
-                    vendas.pop(idx)
-                    st.session_state["clientes"][cliente] = vendas
-                    save_db()
-                    st.success("Venda apagada")
-                    st.rerun()
-                nova_qtd = col3.number_input("Editar Qtde", min_value=1, value=quantidade, key=f"editar_{cliente}_{idx}")
-                if col3.button("Salvar", key=f"salvar_{cliente}_{idx}"):
-                    vendas[idx]["quantidade"] = nova_qtd
-                    save_db()
-                    st.success("Venda atualizada")
-
-        # Apagar cliente (corrigido) - checkbox antes do botão
-        if not visitante:
-            confirmar = st.checkbox(f"Confirme que deseja apagar o cliente {cliente}", key=f"confirm_apagar_{cliente}")
-            if confirmar:
-                if st.button(f"🗑️ Apagar cliente {cliente}"):
-                    st.session_state["clientes"].pop(cliente, None)
-                    save_db()
-                    st.success(f"Cliente {cliente} apagado!")
-                    st.rerun()
-
-# ================== Relatórios ==================
-def relatorio_geral():
-    st.header("📋 Relatório Geral")
-    visitante = is_visitante()
-    linhas = ["📋 Relatório Geral de Vendas", ""]
-    for c, vendas in st.session_state["clientes"].items():
-        total = sum(v.get("preco", 0.0) * v.get("quantidade", 0) for v in vendas)
-        if visitante:
-            linhas.append(f"- {c}: R$ *****")
-        else:
-            linhas.append(f"- {c}: R$ {total:.2f}")
-
-    total_geral = sum(sum(v.get("preco", 0.0) * v.get("quantidade", 0) for v in vendas) for vendas in st.session_state["clientes"].values())
-    if visitante:
-        linhas.append(f"\n💰 Total geral: R$ *****")
-    else:
-        linhas.append(f"\n💰 Total geral: R$ {total_geral:.2f}")
-
-    st.code("\n".join(linhas))
-    st.download_button("Baixar .txt", data="\n".join(linhas), file_name="relatorio_geral.txt")
-
-# ================== Menu lateral ==================
-def bloco_backup_sidebar():
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🧰 Backup")
-    db_json = json.dumps({"produtos": st.session_state["produtos"], "clientes": st.session_state["clientes"]}, ensure_ascii=False, indent=2)
-    st.sidebar.download_button("⬇️ Exportar backup (.json)", data=db_json.encode("utf-8"), file_name="backup_sistema_vendas.json")
-    if not is_visitante():
-        up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
-        if up is not None:
-            try:
-                data = json.load(up)
-                prods = {int(k): v for k, v in data.get("produtos", {}).items()}
-                clis = {k: v for k, v in data.get("clientes", {}).items()}
-                st.session_state["produtos"] = prods
-                st.session_state["clientes"] = clis
-                save_db()
-                st.sidebar.success("Backup restaurado!")
-            except Exception as e:
-                st.sidebar.error(f"Falha ao restaurar: {e}")
-    else:
-        st.sidebar.caption("🔒 Restauração apenas para usuários logados.")
-
-def barra_lateral():
-    st.sidebar.markdown(f"**Usuário:** {st.session_state.get('usuario', '')}")
-    opcoes = {
-        "Resumo 📊": tela_resumo,
-        "Upload PDF 📄": tela_pdf,
-        "Clientes 👥": tela_clientes,
-        "Produtos 📦": tela_produtos,
-        "Relatórios 📋": relatorio_geral,
-    }
-    if not is_visitante():
-        opcoes["Backup 🗂️"] = bloco_backup_sidebar
-
-    # Prevent selectbox index error if menu not in keys
-    opcoes_lista = list(opcoes.keys())
-    menu_atual = st.session_state.get("menu", "Resumo 📊")
-    try:
-        idx = opcoes_lista.index(menu_atual)
-    except ValueError:
-        idx = 0
-
-    menu_selecionado = st.sidebar.selectbox("Menu", opcoes_lista, index=idx)
-    st.session_state["menu"] = menu_selecionado
-    func = opcoes.get(menu_selecionado)
-    if func:
-        func()
-    elif menu_selecionado == "Sair 🚪":
-        # não usamos essa rota por padrão; há botão abaixo
-        pass
-
-    st.sidebar.markdown("---")
-    # Botão sair (seguro)
-    if st.sidebar.button("🚪 Sair"):
+    if escolha == "Clientes 👫":
+        tela_clientes()
+    elif escolha == "Produtos 📦":
+        tela_produtos()
+    elif escolha == "Vendas 💰":
+        tela_vendas()
+    elif escolha == "Relatórios 📊":
+        tela_relatorios()
+    elif escolha == "Sair 🚪":
         st.session_state.clear()
         st.session_state["usuario"] = None
         st.rerun()
 
-# ================== Main ==================
+# Função principal
 def main():
-    if st.session_state.get("usuario") is None:
-        login()
-        st.stop()
-    barra_lateral()
+    if "usuario" not in st.session_state or st.session_state["usuario"] is None:
+        st.warning("⚠️ Você precisa fazer login para acessar o sistema.")
+    else:
+        menu_topo()
 
-if __name__ == "__main__":
-    main()
+main()
