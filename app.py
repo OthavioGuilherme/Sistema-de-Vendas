@@ -134,137 +134,308 @@ def tela_login():
             st.session_state.logado = True
             st.info("Você entrou como visitante (apenas leitura)")
             st.experimental_rerun()
-# ========================== PARTE 2
+# ========================== 
 # ===============================
 # PARTE 2 - Produtos e Vendas
-# ===============================
-
-import pytesseract
+# --------- Dependências necessárias (já presentes no seu app Parte 2) ----------
+import streamlit as st
 from PIL import Image, ImageEnhance, ImageFilter
+import pytesseract
+import numpy as np
+import cv2
 import re
+from datetime import datetime
 
-# Configurar caminho do Tesseract no Streamlit Cloud (caso necessário futuramente)
+# Ajuste (opcional) onde está o tesseract no ambiente:
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
+# ----------------- Helpers de session-safe (compatibilidade db / produtos) -----------------
+def _get_produtos_dict():
+    # retorna dict onde keys são strings (seguro) -> {"4685": {"nome":..., "preco":...}, ...}
+    if "produtos" in st.session_state and isinstance(st.session_state.produtos, dict):
+        return {str(k): v for k, v in st.session_state.produtos.items()}
+    if "db" in st.session_state and isinstance(st.session_state.db.get("produtos", {}), dict):
+        return {str(k): v for k, v in st.session_state.db.get("produtos", {}).items()}
+    return {}
 
-# ---------- Função para processar imagem ----------
-def processar_imagem(imagem):
-    img = imagem.convert("L")  # escala de cinza
-    img = img.filter(ImageFilter.MedianFilter())
-    enhancer = ImageEnhance.Contrast(img)
-    img = enhancer.enhance(2)
-    return img
+def _save_produto(codigo_str, produto_obj):
+    # salva em ambos lugares para compatibilidade
+    if "produtos" in st.session_state and isinstance(st.session_state.produtos, dict):
+        st.session_state.produtos[codigo_str] = produto_obj
+    if "db" in st.session_state and isinstance(st.session_state.db.get("produtos", {}), dict):
+        st.session_state.db["produtos"][codigo_str] = produto_obj
+    # tente chamar save_db se estiver definido (Parte1)
+    try:
+        save_db()
+    except Exception:
+        # caso save_db não exista, ignore
+        pass
 
+def _append_venda(venda_obj):
+    if "vendas" in st.session_state and isinstance(st.session_state.vendas, list):
+        st.session_state.vendas.append(venda_obj)
+    if "db" in st.session_state and isinstance(st.session_state.db.get("vendas", []), list):
+        st.session_state.db.setdefault("vendas", []).append(venda_obj)
+    try:
+        save_db()
+    except Exception:
+        pass
 
-# ---------- Tela de Produtos ----------
-def tela_produtos():
-    st.header("📦 Gestão de Produtos")
+# ----------------- Pré-processamento robusto -----------------
+def _preprocess_for_ocr(pil_img, scale=2):
+    # pil_img = PIL.Image
+    img = pil_img.convert("RGB")
+    # aumentar resolução
+    w, h = img.size
+    img = img.resize((int(w*scale), int(h*scale)), Image.BICUBIC)
 
-    if "db" not in st.session_state:
-        st.session_state.db = {"produtos": {}, "vendas": []}
+    # converter para grayscale
+    gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
 
-    produtos = st.session_state.db.get("produtos", {})
+    # filtro bilateral reduz ruído mantendo bordas
+    gray = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
 
-    with st.form("novo_produto"):
-        codigo = st.text_input("Código do Produto")
-        nome = st.text_input("Nome do Produto")
-        preco = st.number_input("Preço do Produto (R$)", min_value=0.0, format="%.2f")
-        submit = st.form_submit_button("Cadastrar Produto")
+    # equalizar contraste (CLAHE)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    gray = clahe.apply(gray)
 
-        if submit:
-            if codigo and nome and preco > 0:
-                produtos[codigo] = {"nome": nome, "preco": preco}
-                st.session_state.db["produtos"] = produtos
-                salvar_db(st.session_state.db)
-                st.success(f"✅ Produto {nome} cadastrado com sucesso!")
-            else:
-                st.error("⚠️ Preencha todos os campos para cadastrar.")
-
-
-# ---------- Tela de Registrar Vendas por Foto ----------
-def tela_registrar_venda_foto():
-    st.header("🖼️ Registrar Venda por Foto")
-
-    uploaded_file = st.file_uploader("Envie uma foto da etiqueta", type=["jpg", "jpeg", "png"])
-
-    if uploaded_file:
-        img = Image.open(uploaded_file)
-        img_proc = processar_imagem(img)
-
-        # Extrair texto da imagem
-        texto = pytesseract.image_to_string(img_proc, lang="por")
-        st.text_area("📄 Texto detectado:", texto, height=150)
-
-        # ==========================
-        # Extrair Código (Ref) e Preço (Sxxxx)
-        # ==========================
-        ref_match = re.search(r"Ref[:\s]*([0-9]+)", texto, re.IGNORECASE)
-        codigo = ref_match.group(1) if ref_match else None
-
-        preco_match = re.search(r"S\s*([0-9]{2,})([0-9]{2})", texto, re.IGNORECASE)
-        preco = None
-        if preco_match:
-            preco = float(f"{preco_match.group(1)}.{preco_match.group(2)}")
-
-        # Se não encontrar código
-        if not codigo:
-            st.error("⚠️ Não foi possível detectar a referência (código) na etiqueta.")
-            return
-
-        produtos = st.session_state.db.get("produtos", {})
-
-        # Produto já cadastrado
-        if codigo in produtos:
-            produto = produtos[codigo]
-            st.success(f"✅ Produto encontrado: {produto['nome']} - R$ {produto['preco']:.2f}")
-
-            qtd = st.number_input("Quantidade", min_value=1, step=1, key=f"qtd_{codigo}")
-            if st.button("Registrar Venda"):
-                venda = {
-                    "codigo": codigo,
-                    "nome": produto["nome"],
-                    "preco": produto["preco"],
-                    "quantidade": qtd,
-                }
-                st.session_state.db["vendas"].append(venda)
-                salvar_db(st.session_state.db)
-                st.success("💰 Venda registrada com sucesso!")
-
-        # Produto não cadastrado → opção de cadastro
+    # tentativa de deskew (corrigir rotação leve)
+    coords = np.column_stack(np.where(gray < 255))
+    angle = 0.0
+    if coords.size:
+        rect = cv2.minAreaRect(coords)
+        angle = rect[-1]
+        if angle < -45:
+            angle = -(90 + angle)
         else:
-            st.warning(f"⚠️ Produto não cadastrado. Código: {codigo}")
+            angle = -angle
+        # rotaciona somente se ângulo significativo
+        if abs(angle) > 1:
+            (h2, w2) = gray.shape
+            center = (w2 // 2, h2 // 2)
+            M = cv2.getRotationMatrix2D(center, angle, 1.0)
+            gray = cv2.warpAffine(gray, M, (w2, h2), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
-            nome_prod = st.text_input(f"Nome do produto para cadastrar (Código {codigo})")
-            preco_prod = st.number_input(
-                f"Preço do produto (R$) para cadastrar (Código {codigo})",
-                min_value=0.0,
-                format="%.2f",
-                value=preco if preco else 0.0,
-            )
+    # adaptive threshold (melhora fundo irregular)
+    try:
+        th = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY, 31, 15)
+    except Exception:
+        _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-            if st.button(f"Cadastrar produto {codigo}"):
-                if nome_prod and preco_prod > 0:
-                    produtos[codigo] = {"nome": nome_prod, "preco": preco_prod}
-                    st.session_state.db["produtos"] = produtos
-                    salvar_db(st.session_state.db)
-                    st.success(f"✅ Produto {nome_prod} cadastrado com sucesso!")
-                else:
-                    st.error("⚠️ Preencha nome e preço para cadastrar.")
+    # pequeno closing para juntar letras quebradas
+    kernel = np.ones((2,2), np.uint8)
+    th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, kernel)
 
+    return Image.fromarray(th)
 
-# ---------- Tela de Resumo ----------
-def tela_resumo():
-    st.header("📊 Resumo de Vendas")
+# ----------------- Função que tenta OCR com várias configs e retorna melhores candidatos ----------
+def _ocr_attempts_and_candidates(pil_img):
+    # retorna lista de tuples (config, text, data_dict)
+    configs = [
+        "--oem 3 --psm 6",   # assume um bloco de texto
+        "--oem 3 --psm 11",  # sparse text
+        "--oem 3 --psm 3",   # fully automatic
+    ]
+    results = []
+    for cfg in configs:
+        try:
+            text = pytesseract.image_to_string(pil_img, lang="por", config=cfg)
+            data = pytesseract.image_to_data(pil_img, lang="por", config=cfg, output_type=pytesseract.Output.DICT)
+        except Exception as e:
+            text = ""
+            data = {"text":[],"conf":[]}
+        results.append((cfg, text, data))
+    # a seguir, extraímos candidatos analisando textos e tokens
+    all_texts = " \n ".join([r[1] for r in results])
+    # gather word-level candidates with confidences
+    tokens = []
+    for _, _, data in results:
+        words = data.get("text", [])
+        confs = data.get("conf", [])
+        for w, c in zip(words, confs):
+            try:
+                conf_val = int(float(c))
+            except:
+                conf_val = -1
+            tokens.append((w.strip(), conf_val))
+    return results, all_texts, tokens
 
-    vendas = st.session_state.db.get("vendas", [])
-    if not vendas:
-        st.info("Nenhuma venda registrada ainda.")
+# ----------------- Extração robusta de código e preço -----------------
+def _extract_ref_and_price(all_text, tokens):
+    # Priorize 'Ref' no texto (ex: "Ref: 4685" ou "Ref 4685")
+    ref = None
+    m = re.search(r"Ref[:\s]*0*([0-9]{3,6})", all_text, re.IGNORECASE)
+    if m:
+        ref = m.group(1)
+        # remove zeros à esquerda se quiser: ref = str(int(ref))
+    # procurar padrão Sxxxx (S5295 -> 52.95)
+    preco = None
+    m2 = re.search(r"\bS\s*0*([0-9]{2,})([0-9]{2})\b", all_text, re.IGNORECASE)
+    if m2:
+        parte1 = m2.group(1)
+        parte2 = m2.group(2)
+        try:
+            preco = float(f"{int(parte1)}.{int(parte2):02d}")
+        except:
+            preco = None
+    # fallback: procurar valores com vírgula/ponto (ex: 52,95)
+    if preco is None:
+        m3 = re.search(r"(\d{1,3}[.,]\d{2})", all_text)
+        if m3:
+            preco = float(m3.group(1).replace(",", "."))
+    # fallback tokens: procurar token "S5295" com alta confiança
+    if preco is None:
+        for tok, conf in tokens:
+            if conf >= 50:
+                m4 = re.match(r"^S\s*0*([0-9]{3,})([0-9]{2})$", tok, re.IGNORECASE)
+                if m4:
+                    preco = float(f"{int(m4.group(1))}.{int(m4.group(2))}")
+                    break
+    # se ainda não encontrou ref, tentar tokens numéricos com alta confiança (p.ex. '4685')
+    if ref is None:
+        for tok, conf in tokens:
+            if conf >= 60 and re.fullmatch(r"\d{3,6}", tok):
+                ref = tok
+                break
+
+    return ref, preco
+
+# ----------------- Tela principal (substitua a sua atual) -----------------
+def tela_registrar_venda_foto():
+    st.title("📷 Registrar Venda por Foto (OCR melhorado)")
+
+    # 1) selecionar / cadastrar cliente
+    clientes_dict = st.session_state.get("clientes", {})
+    nomes = list(clientes_dict.keys())
+    modo = st.radio("Cliente:", ["Selecionar existente", "Cadastrar novo"], horizontal=True)
+    cliente = None
+    if modo == "Selecionar existente":
+        if not nomes:
+            st.info("Nenhum cliente cadastrado. Cadastre um novo.")
+        else:
+            cliente = st.selectbox("Selecione cliente", nomes)
+    else:
+        novo = st.text_input("Nome do novo cliente")
+        if st.button("Cadastrar cliente"):
+            if novo.strip():
+                st.session_state.setdefault("clientes", {})[novo.strip()] = []
+                st.success(f"Cliente {novo.strip()} cadastrado.")
+                cliente = novo.strip()
+                # evite rerun para manter upload etc.
+
+    if cliente is None:
+        st.info("Selecione ou cadastre um cliente antes de enviar fotos.")
         return
 
-    total = sum(v["preco"] * v["quantidade"] for v in vendas)
-    st.write(f"### 💰 Total vendido: R$ {total:.2f}")
+    st.write("---")
+    uploaded_files = st.file_uploader("Envie até 10 fotos da etiqueta (prefira sem plástico/reflexo)", accept_multiple_files=True, type=["jpg","jpeg","png"])
+    if not uploaded_files:
+        return
+    if len(uploaded_files) > 10:
+        st.warning("Foram selecionadas mais de 10 fotos — apenas as 10 primeiras serão processadas.")
+        uploaded_files = uploaded_files[:10]
 
-    st.table(vendas)
+    produtos = _get_produtos_dict()
+
+    # carrinho temporário local
+    carrinho_local = st.session_state.get("carrinho_foto", [])
+
+    for idx, file in enumerate(uploaded_files):
+        st.markdown(f"### Foto {idx+1}: {file.name}")
+        pil_img = Image.open(file)
+        st.image(pil_img, caption="Original", width=300)
+
+        # Pré-processar
+        proc = _preprocess_for_ocr(pil_img, scale=2)
+        st.image(proc, caption="Pré-processada (para OCR)", width=300)
+
+        # OCR várias tentativas
+        results, all_text, tokens = _ocr_attempts_and_candidates(proc)
+
+        # Mostrar resultados dos attempts (útil para debug)
+        with st.expander("Resultados OCR (tentativas)"):
+            for cfg, text, data in results:
+                st.write(f"Config: {cfg}")
+                st.text_area("Texto:", text, height=120)
+
+        # Extrair candidatos
+        codigo_cand, preco_cand = _extract_ref_and_price(all_text, tokens)
+
+        st.info(f"Candidatos -> Código: {codigo_cand} | Preço: {preco_cand if preco_cand else 'não detectado'}")
+
+        # Permitir seleção/correção manual
+        codigo_input = st.text_input(f"Código detectado (Foto {idx+1})", value=codigo_cand if codigo_cand else "", key=f"cod_user_{idx}")
+        preco_input = st.text_input(f"Preço detectado (R$) (Foto {idx+1})", value=f"{preco_cand:.2f}" if preco_cand else "", key=f"pre_user_{idx}")
+        nome_input = st.text_input(f"Nome do produto (opcional) (Foto {idx+1})", value="", key=f"nome_user_{idx}")
+
+        # Botão para adicionar ao carrinho local
+        if st.button(f"Adicionar foto {idx+1} ao carrinho", key=f"add_btn_{idx}"):
+            # validações básicas
+            if not codigo_input:
+                st.error("Informe um código antes de adicionar.")
+            else:
+                # normalizar código como string
+                codigo_str = str(codigo_input).strip()
+                # preço
+                try:
+                    preco_float = float(preco_input.replace(",", "."))
+                except:
+                    preco_float = None
+                # se produto cadastrado, pegar nome/preço do cadastro (prioridade)
+                produto_cadastrado = produtos.get(codigo_str)
+                if produto_cadastrado:
+                    nome_final = produto_cadastrado.get("nome", nome_input or produto_cadastrado.get("nome","Produto"))
+                    preco_final = produto_cadastrado.get("preco", preco_float if preco_float else 0.0)
+                else:
+                    nome_final = nome_input if nome_input else f"Produto {codigo_str}"
+                    if preco_float:
+                        preco_final = preco_float
+                    else:
+                        st.error("Produto não cadastrado e preço não informado. Preencha o preço ou cadastre o produto.")
+                        continue
+
+                # se não cadastrado, guardar no produtos (opcional)
+                if codigo_str not in produtos:
+                    produtos[codigo_str] = {"nome": nome_final, "preco": preco_final}
+                    _save_produto(codigo_str, produtos[codigo_str])
+                    st.success(f"Produto {nome_final} cadastrado automaticamente.")
+
+                # adicionar ao carrinho local
+                item = {"codigo": codigo_str, "nome": nome_final, "preco": float(preco_final), "quantidade": 1}
+                carrinho_local = st.session_state.get("carrinho_foto", [])
+                carrinho_local.append(item)
+                st.session_state.carrinho_foto = carrinho_local
+                st.success(f"Item adicionado ao carrinho: {nome_final} - R$ {preco_final:.2f}")
+
+    # Mostrar carrinho e permitir finalizar
+    st.write("---")
+    st.subheader("Carrinho (Fotos)")
+    carrinho_local = st.session_state.get("carrinho_foto", [])
+    if not carrinho_local:
+        st.info("Carrinho vazio. Adicione itens das fotos acima.")
+        return
+    total = 0.0
+    for i, it in enumerate(carrinho_local):
+        st.write(f"{i+1}. {it['nome']} (Ref {it['codigo']}) - R$ {it['preco']:.2f} x {it.get('quantidade',1)}")
+        total += it['preco'] * it.get('quantidade',1)
+        if st.button(f"Remover item {i+1}", key=f"rem_cart_{i}"):
+            carrinho_local.pop(i)
+            st.session_state.carrinho_foto = carrinho_local
+            st.experimental_rerun()
+
+    st.write(f"**Total parcial: R$ {total:.2f}**")
+    if st.button("Finalizar venda (itens do carrinho)"):
+        venda = {
+            "cliente": cliente,
+            "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "produtos": carrinho_local.copy(),
+            "total": total
+        }
+        _append_venda(venda)
+        st.session_state.carrinho_foto = []
+        st.success("Venda registrada com sucesso!")
+        st.experimental_rerun()
 # ==========================
 # Parte 3 - Barra lateral, login e roteamento
 # ==========================
