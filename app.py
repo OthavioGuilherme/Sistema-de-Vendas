@@ -134,6 +134,20 @@ def adicionar_produto_manual(cod, nome, preco):
 
 # ================== Telas ==================
 # # ================== Telas ==================
+def tela_resumo():
+    st.header("📊 Resumo de Vendas")
+    total_geral = 0
+    for cliente, vendas in st.session_state["clientes"].items():
+        total_cliente = sum(v["preco"] * v["quantidade"] for v in vendas)
+        st.write(f"{cliente}: R$ {total_cliente:.2f}")
+        total_geral += total_cliente
+    
+    st.markdown(f"### 💰 Total Geral: R$ {total_geral:.2f}")
+    
+    # Exemplo de comissão 25% sobre vendas
+    comissao = total_geral * 0.25
+    st.markdown(f"### 💵 Comissão: R$ {comissao:.2f}")
+
 def tela_pdf():
     st.header("📄 Importar Estoque via Nota Fiscal (PDF)")
     if is_visitante():
