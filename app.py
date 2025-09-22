@@ -283,31 +283,54 @@ def bloco_backup_sidebar():
         st.sidebar.caption("🔒 Restauração apenas para usuários logados.")
 
 # ================== Menu lateral ==================
+# ================== Barra lateral ==================
 def barra_lateral():
-    st.sidebar.markdown(f"**Usuário:** {st.session_state['usuario']}")
-    st.sidebar.markdown("---")
+    visitante = is_visitante()
     
-    # Menu moderno
+    # Definir opções do menu
     opcoes = {
         "Resumo 📊": "Resumo",
         "Upload PDF 🧾": "Upload PDF",
         "Clientes 👥": "Clientes",
         "Produtos 📦": "Produtos",
+        "Relatórios 📋": "Relatórios",
         "Backup 🗂️": "Backup",
-        "Sair 🔒": "Sair"
+        "Zerar Vendas ⚡": "Zerar Vendas",
+        "Sair 🔓": "Sair"
     }
     
-    # Visitantes não veem Backup
-    if is_visitante():
-        del opcoes["Backup 🗂️"]
-
-    menu = st.sidebar.radio("Menu", list(opcoes.keys()), index=list(opcoes.keys()).index(st.session_state.get("menu", "Resumo 📊")))
-    st.session_state["menu"] = opcoes[menu]
+    # Se for visitante, remove opções restritas
+    if visitante:
+        for chave in ["Backup 🗂️", "Zerar Vendas ⚡"]:
+            opcoes.pop(chave)
     
-    # Backup + Zerar vendas (apenas para usuários logados)
-    if not is_visitante():
-        st.sidebar.markdown("---")
-        st.sidebar.caption("⚙️ Configurações")
+    # Garantir que menu atual existe
+    menu_atual = st.session_state.get("menu", "Resumo 📊")
+    if menu_atual not in opcoes:
+        menu_atual = list(opcoes.keys())[0]
+    
+    # Menu lateral
+    menu = st.sidebar.radio("Menu", list(opcoes.keys()), index=list(opcoes.keys()).index(menu_atual))
+    st.session_state["menu"] = menu
+    
+    st.sidebar.markdown("---")
+    
+    # ================== Backup ==================
+    st.sidebar.subheader("🧰 Backup")
+    
+    # Exportar backup
+    db_json = json.dumps({
+        "produtos": st.session_state["produtos"],
+        "clientes": st.session_state["clientes"]
+    }, ensure_ascii=False, indent=2)
+    st.sidebar.download_button(
+        "⬇️ Exportar backup (.json)",
+        data=db_json.encode("utf-8"),
+        file_name="backup_sistema_vendas.json"
+    )
+    
+    # Restaurar backup (somente usuários)
+    if not visitante:
         up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
         if up is not None:
             try:
@@ -321,8 +344,16 @@ def barra_lateral():
                 st.experimental_rerun()
             except Exception as e:
                 st.sidebar.error(f"Falha ao restaurar: {e}")
-        if st.sidebar.button("🧹 Zerar vendas"):
-            zerar_vendas()
+    else:
+        st.sidebar.caption("🔒 Restauração apenas para usuários logados.")
+    
+    # ================== Zerar vendas ==================
+    if not visitante:
+        if st.sidebar.button("⚡ Zerar vendas de todos os clientes"):
+            for cliente in st.session_state["clientes"]:
+                st.session_state["clientes"][cliente] = []
+            save_db()
+            st.sidebar.success("Todas as vendas foram zeradas!")
 # ================== Relatórios ==================
 def relatorio_geral():
     st.header("📋 Relatório Geral")
