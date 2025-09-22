@@ -283,7 +283,36 @@ def barra_lateral():
     menu = st.sidebar.radio("Menu", opcoes, index=idx_atual)
     st.session_state["menu"] = menu
     bloco_backup_sidebar()
+# ================== Relatórios ==================
+def relatorio_geral():
+    st.header("📋 Relatório Geral")
+    linhas = ["📋 Relatório Geral de Vendas", ""]
+    for c, vendas in st.session_state["clientes"].items():
+        total = sum(v.get("preco", 0)*v.get("quantidade",1) for v in vendas)
+        linhas.append(f"- {c}: R$ {total:.2f}")
+    total_geral = sum(sum(v.get("preco",0)*v.get("quantidade",1) for v in vendas)
+                      for vendas in st.session_state["clientes"].values())
+    linhas.append(f"\n💰 Total geral: R$ {total_geral:.2f}")
+    st.code("\n".join(linhas))
+    st.download_button("Baixar .txt", data="\n".join(linhas), file_name="relatorio_geral.txt")
 
+# ================== Roteador ==================
+def roteador():
+    menu = st.session_state.get("menu", "Resumo")
+    if menu == "Resumo":
+        relatorio_geral()
+    elif menu == "Upload PDF":
+        tela_pdf()
+    elif menu == "Clientes":
+        tela_clientes()
+    elif menu == "Produtos":
+        tela_produtos()
+    elif menu == "Backup":
+        st.header("🗂️ Backup")
+        st.info("Use a lateral para exportar ou restaurar backup.")
+    elif menu == "Sair":
+        st.session_state.clear()
+        st.experimental_rerun()
 # ================== Roteador ==================
 def roteador():
     menu = st.session_state.get("menu", "Resumo")
