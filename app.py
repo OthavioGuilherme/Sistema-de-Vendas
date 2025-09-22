@@ -243,12 +243,14 @@ def tela_clientes():
             st.info("Nenhuma venda registrada.")
         for idx, v in enumerate(vendas):
             col1, col2, col3 = st.columns([5,2,2])
-            cod = v.get("cod", "???")
+            cod = v.get("cod")
             nome = v.get("nome", "???")
             quantidade = v.get("quantidade", 0)
             preco = v.get("preco", 0.0)
             valor_exibir = f"R$ {preco:.2f}" if not visitante else "R$ *****"
-            col1.write(f"{cod} - {nome} x {quantidade} ({valor_exibir} cada)")
+            
+            linha_exibir = f"{nome} x {quantidade} ({valor_exibir} cada)" if cod is None else f"{cod} - {nome} x {quantidade} ({valor_exibir} cada)"
+            col1.write(linha_exibir)
             
             # Bloquear edição e exclusão para visitante
             if visitante:
@@ -267,15 +269,16 @@ def tela_clientes():
                     save_db()
                     st.success("Venda atualizada")
         
-        # Apagar cliente (novo) - usando checkbox para confirmar
+        # Apagar cliente (corrigido) - checkbox antes do botão
         if not visitante:
-            if st.button(f"🗑️ Apagar cliente {cliente}"):
-                confirmar = st.checkbox(f"Confirme que deseja apagar o cliente {cliente}", key=f"confirm_apagar_{cliente}")
-                if confirmar:
+            confirmar = st.checkbox(f"Confirme que deseja apagar o cliente {cliente}", key=f"confirm_apagar_{cliente}")
+            if confirmar:
+                if st.button(f"🗑️ Apagar cliente {cliente}"):
                     st.session_state["clientes"].pop(cliente)
                     save_db()
                     st.success(f"Cliente {cliente} apagado!")
                     st.session_state["recarregar"] = not st.session_state.get("recarregar", False)
+                    return  # força rerun para atualizar a tela
 
 # ================== Relatórios ==================
 def relatorio_geral():
@@ -343,8 +346,8 @@ def barra_lateral():
     if func:
         func()
     elif menu_selecionado == "Sair 🚪":
-        st.session_state.clear()         # Limpa tudo
-        st.experimental_rerun()          # Volta imediatamente para login
+        st.session_state.clear()           # Limpa tudo
+        st.stop()                          # Volta para login
 
 # ================== Main ==================
 def main():
