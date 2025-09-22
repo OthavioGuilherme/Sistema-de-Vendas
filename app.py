@@ -16,6 +16,38 @@ except Exception:
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
 # ================== Usuários (login) ==================
+# ====================
+# PARTE 1 - LOGIN
+# ====================
+
+import streamlit as st
+from parte3 import main  # importa a parte 3
+
+def tela_login():
+    st.title("🔑 Sistema de Vendas - Login")
+
+    usuario = st.text_input("Usuário")
+    senha = st.text_input("Senha", type="password")
+
+    if st.button("Entrar"):
+        if usuario == "admin" and senha == "123":
+            st.session_state["usuario"] = usuario
+            st.success("Login realizado com sucesso!")
+            st.rerun()  # força recarregar e ir pra parte 3
+        elif usuario == "visitante" and senha == "visitante":
+            st.session_state["usuario"] = "visitante"
+            st.success("Login como visitante realizado!")
+            st.rerun()
+        else:
+            st.error("Usuário ou senha inválidos!")
+
+def main_login():
+    if "usuario" not in st.session_state or st.session_state["usuario"] is None:
+        tela_login()
+    else:
+        main()  # chama a parte 3
+
+main_login()
 USERS = {"othavio": "122008", "isabela": "122008"}  # usuários e senhas em texto (simples)
 LOG_FILE = "acessos.log"
 DB_FILE = "db.json"
