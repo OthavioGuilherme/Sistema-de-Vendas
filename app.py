@@ -96,17 +96,25 @@ def login():
                 st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
                 st.session_state["recarregar"] = not st.session_state["recarregar"]
 
-# ================== Telas principais ==================
+# ================== Tela de Resumo ==================
 def tela_resumo():
     st.header("📊 Resumo de Vendas")
+    visitante = is_visitante()
     total_geral = 0
     for cliente, vendas in st.session_state["clientes"].items():
         total_cliente = sum(v["preco"]*v["quantidade"] for v in vendas)
         total_geral += total_cliente
+    
     comissao = total_geral * 0.25
-    st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
-    st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
+    
+    if visitante:
+        st.metric("💰 Total Geral de Vendas", "R$ *****")
+        st.metric("🧾 Comissão (25%)", "R$ *****")
+    else:
+        st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
+        st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
 
+# ================== PDF ==================
 def tela_pdf():
     st.header("📄 Importar Estoque via Nota Fiscal (PDF)")
     if is_visitante():
@@ -117,7 +125,6 @@ def tela_pdf():
         if st.button("Substituir estoque pelo PDF"):
             substituir_estoque_pdf(pdf_file)
 
-# ================== PDF ==================
 def substituir_estoque_pdf(uploaded_file):
     data = uploaded_file.read()
     stream = io.BytesIO(data)
@@ -181,6 +188,7 @@ def tela_clientes():
     visitante = is_visitante()
     aba = st.radio("Ação", ["Consultar cliente", "Cadastrar cliente"], horizontal=True)
     
+    # Bloquear cadastro de cliente para visitante
     if visitante and aba == "Cadastrar cliente":
         st.info("🔒 Visitantes não podem cadastrar clientes.")
         return
@@ -198,6 +206,7 @@ def tela_clientes():
                 st.success(f"Cliente {nome} cadastrado!")
         return
     
+    # Consultar clientes
     filtro = st.text_input("Buscar cliente (2+ letras)", key="buscar_cliente").lower()
     matches = [c for c in st.session_state["clientes"] if filtro in c.lower()]
     cliente = st.selectbox("Selecione o cliente", matches) if matches else None
@@ -206,29 +215,42 @@ def tela_clientes():
         st.subheader(f"{cliente}")
         vendas = st.session_state["clientes"][cliente]
         
+        # ➕ Adicionar Venda
         st.markdown("### ➕ Adicionar Venda")
-        produto_input = st.text_input("Digite código ou nome do produto", key=f"venda_produto_{cliente}")
-        opcoes_produtos = [
-            f"{cod} - {p['nome']}" for cod, p in st.session_state["produtos"].items()
-            if produto_input.lower() in str(cod) or produto_input.lower() in p["nome"].lower()
-        ]
-        produto_selecionado = st.selectbox("Escolha o produto", opcoes_produtos, key=f"select_venda_produto_{cliente}") if opcoes_produtos else None
+        if visitante:
+            st.info("🔒 Visitantes não podem adicionar vendas.")
+        else:
+            produto_input = st.text_input("Digite código ou nome do produto", key=f"venda_produto_{cliente}")
+            opcoes_produtos = [
+                f"{cod} - {p['nome']}" for cod, p in st.session_state["produtos"].items()
+                if produto_input.lower() in str(cod) or produto_input.lower() in p["nome"].lower()
+            ]
+            produto_selecionado = st.selectbox("Escolha o produto", opcoes_produtos, key=f"select_venda_produto_{cliente}") if opcoes_produtos else None
+            quantidade = st.number_input("Quantidade", min_value=1, step=1, key=f"quantidade_venda_{cliente}")
+            if st.button("Adicionar venda", key=f"btn_add_venda_{cliente}"):
+                if produto_selecionado:
+                    cod = int(produto_selecionado.split(" - ")[0])
+                    p = st.session_state["produtos"][cod]
+                    vendas.append({"cod": cod, "nome": p["nome"], "preco": p["preco"], "quantidade": quantidade})
+                    st.session_state["clientes"][cliente] = vendas
+                    save_db()
+                    st.success(f"Venda adicionada ao cliente {cliente}!")
         
-        quantidade = st.number_input("Quantidade", min_value=1, step=1, key=f"quantidade_venda_{cliente}")
-        if st.button("Adicionar venda", key=f"btn_add_venda_{cliente}"):
-            if produto_selecionado:
-                cod = int(produto_selecionado.split(" - ")[0])
-                p = st.session_state["produtos"][cod]
-                vendas.append({"cod": cod, "nome": p["nome"], "preco": p["preco"], "quantidade": quantidade})
-                st.session_state["clientes"][cliente] = vendas
-                save_db()
-                st.success(f"Venda adicionada ao cliente {cliente}!")
-
-        if vendas:
-            st.markdown("### 📝 Vendas do Cliente")
-            for idx, v in enumerate(vendas):
-                col1, col2, col3 = st.columns([5,2,2])
-                col1.write(f"{v['cod']} - {v['nome']} x {v['quantidade']} (R$ {v['preco']:.2f} cada)")
+        # 📝 Vendas do Cliente
+        st.markdown("### 📝 Vendas do Cliente")
+        if not vendas:
+            st.info("Nenhuma venda registrada.")
+        for idx, v in enumerate(vendas):
+            col1, col2, col3 = st.columns([5,2,2])
+            valor_exibir = f"R$ {v['preco']:.2f}" if not visitante else "R$ *****"
+            col1.write(f"{v['cod']} - {v['nome']} x {v['quantidade']} ({valor_exibir} cada)")
+            
+            # Bloquear edição e exclusão para visitante
+            if visitante:
+                col2.button("Apagar", key=f"apagar_{cliente}_{idx}", disabled=True)
+                col3.number_input("Editar Qtde", min_value=1, value=v["quantidade"], key=f"editar_{cliente}_{idx}", disabled=True)
+                col3.button("Salvar", key=f"salvar_{cliente}_{idx}", disabled=True)
+            else:
                 if col2.button("Apagar", key=f"apagar_{cliente}_{idx}"):
                     vendas.pop(idx)
                     st.session_state["clientes"][cliente] = vendas
@@ -239,17 +261,35 @@ def tela_clientes():
                     vendas[idx]["quantidade"] = nova_qtd
                     save_db()
                     st.success("Venda atualizada")
+        
+        # Apagar cliente (novo)
+        if not visitante:
+            if st.button(f"🗑️ Apagar cliente {cliente}"):
+                if st.confirm(f"Tem certeza que deseja apagar o cliente {cliente}?"):
+                    st.session_state["clientes"].pop(cliente)
+                    save_db()
+                    st.success(f"Cliente {cliente} apagado!")
+                    st.session_state["recarregar"] = not st.session_state["recarregar"]
 
 # ================== Relatórios ==================
 def relatorio_geral():
     st.header("📋 Relatório Geral")
+    visitante = is_visitante()
     linhas = ["📋 Relatório Geral de Vendas", ""]
     for c, vendas in st.session_state["clientes"].items():
         total = sum(v.get("preco",0)*v.get("quantidade",1) for v in vendas)
-        linhas.append(f"- {c}: R$ {total:.2f}")
+        if visitante:
+            linhas.append(f"- {c}: R$ *****")
+        else:
+            linhas.append(f"- {c}: R$ {total:.2f}")
+    
     total_geral = sum(sum(v.get("preco",0)*v.get("quantidade",1) for v in vendas)
                       for vendas in st.session_state["clientes"].values())
-    linhas.append(f"\n💰 Total geral: R$ {total_geral:.2f}")
+    if visitante:
+        linhas.append(f"\n💰 Total geral: R$ *****")
+    else:
+        linhas.append(f"\n💰 Total geral: R$ {total_geral:.2f}")
+    
     st.code("\n".join(linhas))
     st.download_button("Baixar .txt", data="\n".join(linhas), file_name="relatorio_geral.txt")
 
