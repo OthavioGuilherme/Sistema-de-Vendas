@@ -2,6 +2,4 @@ pdfplumber
 streamlit
 pillow
 pdfplumber
-pytesseract
-numpy
-opencv-python-headless
+
