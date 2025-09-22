@@ -243,13 +243,17 @@ def tela_clientes():
             st.info("Nenhuma venda registrada.")
         for idx, v in enumerate(vendas):
             col1, col2, col3 = st.columns([5,2,2])
-            valor_exibir = f"R$ {v['preco']:.2f}" if not visitante else "R$ *****"
-            col1.write(f"{v['cod']} - {v['nome']} x {v['quantidade']} ({valor_exibir} cada)")
+            cod = v.get("cod", "???")
+            nome = v.get("nome", "???")
+            quantidade = v.get("quantidade", 0)
+            preco = v.get("preco", 0.0)
+            valor_exibir = f"R$ {preco:.2f}" if not visitante else "R$ *****"
+            col1.write(f"{cod} - {nome} x {quantidade} ({valor_exibir} cada)")
             
             # Bloquear edição e exclusão para visitante
             if visitante:
                 col2.button("Apagar", key=f"apagar_{cliente}_{idx}", disabled=True)
-                col3.number_input("Editar Qtde", min_value=1, value=v["quantidade"], key=f"editar_{cliente}_{idx}", disabled=True)
+                col3.number_input("Editar Qtde", min_value=1, value=quantidade, key=f"editar_{cliente}_{idx}", disabled=True)
                 col3.button("Salvar", key=f"salvar_{cliente}_{idx}", disabled=True)
             else:
                 if col2.button("Apagar", key=f"apagar_{cliente}_{idx}"):
@@ -257,16 +261,17 @@ def tela_clientes():
                     st.session_state["clientes"][cliente] = vendas
                     save_db()
                     st.session_state["recarregar"] = not st.session_state.get("recarregar", False)
-                nova_qtd = col3.number_input("Editar Qtde", min_value=1, value=v["quantidade"], key=f"editar_{cliente}_{idx}")
+                nova_qtd = col3.number_input("Editar Qtde", min_value=1, value=quantidade, key=f"editar_{cliente}_{idx}")
                 if col3.button("Salvar", key=f"salvar_{cliente}_{idx}"):
                     vendas[idx]["quantidade"] = nova_qtd
                     save_db()
                     st.success("Venda atualizada")
         
-        # Apagar cliente (novo)
+        # Apagar cliente (novo) - usando checkbox para confirmar
         if not visitante:
             if st.button(f"🗑️ Apagar cliente {cliente}"):
-                if st.confirm(f"Tem certeza que deseja apagar o cliente {cliente}?"):
+                confirmar = st.checkbox(f"Confirme que deseja apagar o cliente {cliente}", key=f"confirm_apagar_{cliente}")
+                if confirmar:
                     st.session_state["clientes"].pop(cliente)
                     save_db()
                     st.success(f"Cliente {cliente} apagado!")
@@ -317,7 +322,7 @@ def bloco_backup_sidebar():
         st.sidebar.caption("🔒 Restauração apenas para usuários logados.")
 
 def barra_lateral():
-    st.sidebar.markdown(f"**Usuário:** {st.session_state['usuario']}")
+    st.sidebar.markdown(f"**Usuário:** {st.session_state.get('usuario', '')}")
     opcoes = {
         "Resumo 📊": tela_resumo,
         "Upload PDF 📄": tela_pdf,
@@ -338,8 +343,8 @@ def barra_lateral():
     if func:
         func()
     elif menu_selecionado == "Sair 🚪":
-        st.session_state.clear()
-        st.session_state["recarregar"] = not st.session_state.get("recarregar", False)
+        st.session_state.clear()         # Limpa tudo
+        st.experimental_rerun()          # Volta imediatamente para login
 
 # ================== Main ==================
 def main():
