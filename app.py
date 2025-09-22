@@ -26,7 +26,7 @@ def registrar_acesso(usuario: str):
 if "usuario" not in st.session_state:
     st.session_state["usuario"] = None
 if "produtos" not in st.session_state:
-    st.session_state["produtos"] = {}  # estoque inicial vazio
+    st.session_state["produtos"] = {}  # estoque vazio inicial
 if "clientes" not in st.session_state:
     st.session_state["clientes"] = {
         "Tabata": [],
@@ -39,15 +39,13 @@ if "clientes" not in st.session_state:
 if "carrinho" not in st.session_state:
     st.session_state["carrinho"] = []
 if "menu" not in st.session_state:
-    st.session_state["menu"] = "Resumo"
+    st.session_state["menu"] = "Resumo 📊"
 
 # ================== Helpers ==================
 def is_visitante():
-    """Verifica se o usuário atual é visitante"""
     return st.session_state["usuario"] and st.session_state["usuario"].startswith("visitante-")
 
 def save_db():
-    """Salva produtos e clientes no arquivo JSON"""
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f:
             json.dump({
@@ -58,7 +56,6 @@ def save_db():
         st.warning(f"Falha ao salvar DB: {e}")
 
 def load_db():
-    """Carrega produtos e clientes do arquivo JSON"""
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
@@ -66,20 +63,13 @@ def load_db():
             prods = {int(k): v for k, v in data.get("produtos", {}).items()}
             clis = {k: v for k, v in data.get("clientes", {}).items()}
             return prods, clis
-        except Exception as e:
-            st.warning(f"Falha ao carregar DB: {e}")
+        except:
+            pass
     return {}, st.session_state["clientes"]
-
-def zerar_vendas():
-    """Zera todas as vendas dos clientes"""
-    for cliente in st.session_state["clientes"]:
-        st.session_state["clientes"][cliente] = []
-    save_db()
-    st.success("Todas as vendas foram zeradas!")
 
 # ================== Inicialização DB ==================
 st.session_state["produtos"], st.session_state["clientes"] = load_db()
-# ================== Login ==================
+
 # ================== Login ==================
 def login():
     st.title("🔐 Login")
@@ -93,7 +83,6 @@ def login():
                 st.session_state["usuario"] = usuario
                 registrar_acesso(f"login-usuario:{usuario}")
                 st.success(f"Bem-vindo(a), {usuario}!")
-                st.stop()  # interrompe aqui e reinicia o app com o usuário logado
             else:
                 st.error("Usuário ou senha incorretos.")
     else:
@@ -103,33 +92,12 @@ def login():
                 st.session_state["usuario"] = f"visitante-{nome.strip()}"
                 registrar_acesso(f"login-visitante:{nome.strip()}")
                 st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
-                st.stop()  # interrompe aqui e reinicia o app com o visitante logado
-            else:
-                st.warning("Por favor, digite um nome.")
 
-# ================== Tela de Resumo ==================
-def tela_resumo():
-    st.header("📊 Resumo de Vendas")
-    total_geral = 0
-    for cliente, vendas in st.session_state["clientes"].items():
-        total_cliente = sum(v.get("preco",0)*v.get("quantidade",1) for v in vendas)
-        st.write(f"- {cliente}: R$ {total_cliente:.2f}")
-        total_geral += total_cliente
-    
-    # Comissão progressiva (exemplo simplificado)
-    if total_geral <= 1000:
-        comissao = total_geral * 0.25
-    elif total_geral <= 5000:
-        comissao = total_geral * 0.30
-    elif total_geral <= 10000:
-        comissao = total_geral * 0.35
-    else:
-        comissao = total_geral * 0.40
-
-    st.subheader(f"💰 Total Geral: R$ {total_geral:.2f}")
-    st.subheader(f"💵 Comissão estimada: R$ {comissao:.2f}")
-
-# ================== Upload PDF para estoque ==================
+# ================== Execução do login ==================
+if st.session_state["usuario"] is None:
+    login()
+    st.stop()  # impede execução das telas principais até login
+# ================== Funções principais ==================
 def substituir_estoque_pdf(uploaded_file):
     """
     Substitui estoque a partir do PDF da nota fiscal.
@@ -139,7 +107,6 @@ def substituir_estoque_pdf(uploaded_file):
     stream = io.BytesIO(data)
     novos_produtos = {}
     linha_regex = re.compile(r'^\s*(\d+)\s+0*(\d{1,6})\s+(.+?)\s+([\d.,]+)\s*$')
-    
     with pdfplumber.open(stream) as pdf:
         for page in pdf.pages:
             text = page.extract_text()
@@ -159,7 +126,29 @@ def substituir_estoque_pdf(uploaded_file):
     save_db()
     st.success("Estoque atualizado a partir do PDF!")
 
-# ================== Tela PDF ==================
+def adicionar_produto_manual(cod, nome, preco):
+    cod = int(cod)
+    st.session_state["produtos"][cod] = {"nome": nome.strip(), "preco": float(preco)}
+    save_db()
+    st.success(f"Produto {nome} adicionado/atualizado!")
+
+# ================== Telas ==================
+def tela_resumo():
+    st.header("📊 Resumo de Vendas")
+    total_geral = 0
+    for c, vendas in st.session_state["clientes"].items():
+        total_cliente = sum(v.get("preco",0)*v.get("quantidade",1) for v in vendas)
+        total_geral += total_cliente
+        st.write(f"- {c}: R$ {total_cliente:.2f}")
+    st.markdown(f"**💰 Total Geral: R$ {total_geral:.2f}**")
+    comissao = total_geral * 0.25  # exemplo 25%
+    st.markdown(f"**📈 Comissão: R$ {comissao:.2f}**")
+    if st.button("Zerar todas as vendas"):
+        for c in st.session_state["clientes"]:
+            st.session_state["clientes"][c] = []
+        save_db()
+        st.success("Vendas zeradas!")
+
 def tela_pdf():
     st.header("📄 Importar Estoque via Nota Fiscal (PDF)")
     if is_visitante():
@@ -169,19 +158,13 @@ def tela_pdf():
     if pdf_file is not None:
         if st.button("Substituir estoque pelo PDF"):
             substituir_estoque_pdf(pdf_file)
-# ================== Produtos ==================
-def adicionar_produto_manual(cod, nome, preco):
-    cod = int(cod)
-    st.session_state["produtos"][cod] = {"nome": nome.strip(), "preco": float(preco)}
-    save_db()
-    st.success(f"Produto {nome} adicionado/atualizado!")
 
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
-    acao = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True)
+    sub = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True)
     
-    if acao == "Adicionar":
+    if sub == "Adicionar":
         if visitante:
             st.info("🔒 Visitantes não podem adicionar produtos.")
             return
@@ -198,10 +181,9 @@ def tela_produtos():
     else:
         termo = st.text_input("Buscar por nome ou código").lower()
         for cod, dados in sorted(st.session_state["produtos"].items(), key=lambda x: x[1]["nome"].lower()):
-            if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
+            if termo in str(cod) or termo in dados["nome"].lower() or termo=="":
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
 
-# ================== Clientes ==================
 def tela_clientes():
     st.header("👥 Clientes")
     visitante = is_visitante()
@@ -224,7 +206,7 @@ def tela_clientes():
                 st.success(f"Cliente {nome} cadastrado!")
         return
     
-    # Consultar cliente
+    # Consultar cliente e adicionar produto
     filtro = st.text_input("Buscar cliente (2+ letras)").lower()
     matches = [c for c in st.session_state["clientes"] if filtro in c.lower()]
     cliente = st.selectbox("Selecione o cliente", matches) if matches else None
@@ -232,26 +214,18 @@ def tela_clientes():
     if cliente:
         st.subheader(f"{cliente}")
         st.info("Vendas estão zeradas neste sistema simplificado.")
-        
-        # Adicionar venda
-        st.markdown("### 🛒 Adicionar venda")
-        if not st.session_state["produtos"]:
-            st.warning("Nenhum produto cadastrado. Faça upload de uma nota ou cadastre produtos.")
-        else:
-            produto_cod = st.selectbox("Produto", list(st.session_state["produtos"].keys()), format_func=lambda x: f"{x} - {st.session_state['produtos'][x]['nome']}")
-            quantidade = st.number_input("Quantidade", min_value=1, step=1)
-            if st.button("Registrar venda"):
-                venda = {
-                    "codigo": produto_cod,
-                    "nome": st.session_state["produtos"][produto_cod]["nome"],
-                    "preco": st.session_state["produtos"][produto_cod]["preco"],
-                    "quantidade": quantidade
-                }
-                st.session_state["clientes"][cliente].append(venda)
+        st.write("Adicionar produto a este cliente:")
+        cod = st.number_input("Código", min_value=1, step=1, key="cod_cliente")
+        qtd = st.number_input("Quantidade", min_value=1, step=1, key="qtd_cliente")
+        if cod in st.session_state["produtos"]:
+            if st.button("Adicionar ao cliente", key="btn_add_cliente"):
+                prod = st.session_state["produtos"][cod]
+                st.session_state["clientes"][cliente].append({"codigo": cod, "nome": prod["nome"], "preco": prod["preco"], "quantidade": qtd})
                 save_db()
-                st.success(f"Venda registrada para {cliente}!")
-
-# ================== Backup ==================
+                st.success(f"{qtd}x {prod['nome']} adicionados a {cliente}!")
+        else:
+            st.warning("Código de produto não encontrado.")
+# ================== Menu lateral moderno ==================
 def bloco_backup_sidebar():
     st.sidebar.markdown("---")
     st.sidebar.subheader("🧰 Backup")
@@ -277,83 +251,35 @@ def bloco_backup_sidebar():
                 st.session_state["clientes"] = clis
                 save_db()
                 st.sidebar.success("Backup restaurado!")
-            except Exception as e:
-                st.sidebar.error(f"Falha ao restaurar: {e}")
-    else:
-        st.sidebar.caption("🔒 Restauração apenas para usuários logados.")
-
-# ================== Menu lateral ==================
-# ================== Barra lateral ==================
-def barra_lateral():
-    visitante = is_visitante()
-    
-    # Definir opções do menu
-    opcoes = {
-        "Resumo 📊": "Resumo",
-        "Upload PDF 🧾": "Upload PDF",
-        "Clientes 👥": "Clientes",
-        "Produtos 📦": "Produtos",
-        "Relatórios 📋": "Relatórios",
-        "Backup 🗂️": "Backup",
-        "Zerar Vendas ⚡": "Zerar Vendas",
-        "Sair 🔓": "Sair"
-    }
-    
-    # Se for visitante, remove opções restritas
-    if visitante:
-        for chave in ["Backup 🗂️", "Zerar Vendas ⚡"]:
-            opcoes.pop(chave)
-    
-    # Garantir que menu atual existe
-    menu_atual = st.session_state.get("menu", "Resumo 📊")
-    if menu_atual not in opcoes:
-        menu_atual = list(opcoes.keys())[0]
-    
-    # Menu lateral
-    menu = st.sidebar.radio("Menu", list(opcoes.keys()), index=list(opcoes.keys()).index(menu_atual))
-    st.session_state["menu"] = menu
-    
-    st.sidebar.markdown("---")
-    
-    # ================== Backup ==================
-    st.sidebar.subheader("🧰 Backup")
-    
-    # Exportar backup
-    db_json = json.dumps({
-        "produtos": st.session_state["produtos"],
-        "clientes": st.session_state["clientes"]
-    }, ensure_ascii=False, indent=2)
-    st.sidebar.download_button(
-        "⬇️ Exportar backup (.json)",
-        data=db_json.encode("utf-8"),
-        file_name="backup_sistema_vendas.json"
-    )
-    
-    # Restaurar backup (somente usuários)
-    if not visitante:
-        up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
-        if up is not None:
-            try:
-                data = json.load(up)
-                prods = {int(k): v for k, v in data.get("produtos", {}).items()}
-                clis = {k: v for k, v in data.get("clientes", {}).items()}
-                st.session_state["produtos"] = prods
-                st.session_state["clientes"] = clis
-                save_db()
-                st.sidebar.success("Backup restaurado!")
                 st.experimental_rerun()
             except Exception as e:
                 st.sidebar.error(f"Falha ao restaurar: {e}")
     else:
         st.sidebar.caption("🔒 Restauração apenas para usuários logados.")
+
+def barra_lateral():
+    st.sidebar.markdown(f"**Usuário:** {st.session_state['usuario']}")
+    menu_items = [
+        ("Resumo 📊", tela_resumo),
+        ("Upload PDF 📄", tela_pdf),
+        ("Clientes 👥", tela_clientes),
+        ("Produtos 📦", tela_produtos),
+        ("Relatórios 📋", relatorio_geral),
+        ("Sair 🚪", None)
+    ]
+    if not is_visitante():
+        menu_items.insert(-1, ("Backup 🗂️", None))
+
+    # Menu moderno usando botões
+    for title, func in menu_items:
+        if st.sidebar.button(title):
+            st.session_state["menu"] = title
+            if title == "Sair 🚪":
+                st.session_state.clear()
+                st.experimental_rerun()
     
-    # ================== Zerar vendas ==================
-    if not visitante:
-        if st.sidebar.button("⚡ Zerar vendas de todos os clientes"):
-            for cliente in st.session_state["clientes"]:
-                st.session_state["clientes"][cliente] = []
-            save_db()
-            st.sidebar.success("Todas as vendas foram zeradas!")
+    bloco_backup_sidebar()
+
 # ================== Relatórios ==================
 def relatorio_geral():
     st.header("📋 Relatório Geral")
@@ -369,55 +295,32 @@ def relatorio_geral():
 
 # ================== Roteador ==================
 def roteador():
-    menu = st.session_state.get("menu", "Resumo")
-    if menu == "Resumo":
-        relatorio_geral()
-    elif menu == "Upload PDF":
-        tela_pdf()
-    elif menu == "Clientes":
-        tela_clientes()
-    elif menu == "Produtos":
-        tela_produtos()
-    elif menu == "Backup":
-        st.header("🗂️ Backup")
-        st.info("Use a lateral para exportar ou restaurar backup.")
-    elif menu == "Sair":
-        st.session_state.clear()
-        st.experimental_rerun()
-# ================== Roteador ==================
-def roteador():
-    menu = st.session_state.get("menu", "Resumo")
-    if menu == "Resumo":
+    menu = st.session_state.get("menu", "Resumo 📊")
+    if menu == "Resumo 📊":
         tela_resumo()
-    elif menu == "Upload PDF":
+    elif menu == "Upload PDF 📄":
         tela_pdf()
-    elif menu == "Clientes":
+    elif menu == "Clientes 👥":
         tela_clientes()
-    elif menu == "Produtos":
+    elif menu == "Produtos 📦":
         tela_produtos()
-    elif menu == "Relatórios":
+    elif menu == "Relatórios 📋":
         relatorio_geral()
-    elif menu == "Backup":
+    elif menu == "Backup 🗂️":
         st.header("🗂️ Backup")
         st.info("Use a lateral para exportar ou restaurar backup.")
-    elif menu == "Sair":
-        st.session_state.clear()
-        st.experimental_rerun()
 
 # ================== Main ==================
 def main():
     if "usuario" not in st.session_state:
         st.session_state["usuario"] = None
     if "menu" not in st.session_state:
-        st.session_state["menu"] = "Resumo"
-    
+        st.session_state["menu"] = "Resumo 📊"
+
     if st.session_state["usuario"] is None:
-        if login():
-            st.experimental_rerun()
-        else:
-            st.stop()
-    
-    # Usuário logado
+        login()
+        st.stop()  # impede execução das telas principais até login
+
     barra_lateral()
     roteador()
 
