@@ -135,235 +135,136 @@ def tela_login():
             st.info("Você entrou como visitante (apenas leitura)")
             st.experimental_rerun()
 # ========================== PARTE 2
+# ===============================
+# PARTE 2 - Produtos e Vendas
+# ===============================
+
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 import re
-from datetime import datetime
-import streamlit as st
 
-# ---------------- Tela Resumo ----------------
+# Configurar caminho do Tesseract no Streamlit Cloud (caso necessário futuramente)
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
+
+# ---------- Função para processar imagem ----------
+def processar_imagem(imagem):
+    img = imagem.convert("L")  # escala de cinza
+    img = img.filter(ImageFilter.MedianFilter())
+    enhancer = ImageEnhance.Contrast(img)
+    img = enhancer.enhance(2)
+    return img
+
+
+# ---------- Tela de Produtos ----------
+def tela_produtos():
+    st.header("📦 Gestão de Produtos")
+
+    if "db" not in st.session_state:
+        st.session_state.db = {"produtos": {}, "vendas": []}
+
+    produtos = st.session_state.db.get("produtos", {})
+
+    with st.form("novo_produto"):
+        codigo = st.text_input("Código do Produto")
+        nome = st.text_input("Nome do Produto")
+        preco = st.number_input("Preço do Produto (R$)", min_value=0.0, format="%.2f")
+        submit = st.form_submit_button("Cadastrar Produto")
+
+        if submit:
+            if codigo and nome and preco > 0:
+                produtos[codigo] = {"nome": nome, "preco": preco}
+                st.session_state.db["produtos"] = produtos
+                salvar_db(st.session_state.db)
+                st.success(f"✅ Produto {nome} cadastrado com sucesso!")
+            else:
+                st.error("⚠️ Preencha todos os campos para cadastrar.")
+
+
+# ---------- Tela de Registrar Vendas por Foto ----------
+def tela_registrar_venda_foto():
+    st.header("🖼️ Registrar Venda por Foto")
+
+    uploaded_file = st.file_uploader("Envie uma foto da etiqueta", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file:
+        img = Image.open(uploaded_file)
+        img_proc = processar_imagem(img)
+
+        # Extrair texto da imagem
+        texto = pytesseract.image_to_string(img_proc, lang="por")
+        st.text_area("📄 Texto detectado:", texto, height=150)
+
+        # ==========================
+        # Extrair Código (Ref) e Preço (Sxxxx)
+        # ==========================
+        ref_match = re.search(r"Ref[:\s]*([0-9]+)", texto, re.IGNORECASE)
+        codigo = ref_match.group(1) if ref_match else None
+
+        preco_match = re.search(r"S\s*([0-9]{2,})([0-9]{2})", texto, re.IGNORECASE)
+        preco = None
+        if preco_match:
+            preco = float(f"{preco_match.group(1)}.{preco_match.group(2)}")
+
+        # Se não encontrar código
+        if not codigo:
+            st.error("⚠️ Não foi possível detectar a referência (código) na etiqueta.")
+            return
+
+        produtos = st.session_state.db.get("produtos", {})
+
+        # Produto já cadastrado
+        if codigo in produtos:
+            produto = produtos[codigo]
+            st.success(f"✅ Produto encontrado: {produto['nome']} - R$ {produto['preco']:.2f}")
+
+            qtd = st.number_input("Quantidade", min_value=1, step=1, key=f"qtd_{codigo}")
+            if st.button("Registrar Venda"):
+                venda = {
+                    "codigo": codigo,
+                    "nome": produto["nome"],
+                    "preco": produto["preco"],
+                    "quantidade": qtd,
+                }
+                st.session_state.db["vendas"].append(venda)
+                salvar_db(st.session_state.db)
+                st.success("💰 Venda registrada com sucesso!")
+
+        # Produto não cadastrado → opção de cadastro
+        else:
+            st.warning(f"⚠️ Produto não cadastrado. Código: {codigo}")
+
+            nome_prod = st.text_input(f"Nome do produto para cadastrar (Código {codigo})")
+            preco_prod = st.number_input(
+                f"Preço do produto (R$) para cadastrar (Código {codigo})",
+                min_value=0.0,
+                format="%.2f",
+                value=preco if preco else 0.0,
+            )
+
+            if st.button(f"Cadastrar produto {codigo}"):
+                if nome_prod and preco_prod > 0:
+                    produtos[codigo] = {"nome": nome_prod, "preco": preco_prod}
+                    st.session_state.db["produtos"] = produtos
+                    salvar_db(st.session_state.db)
+                    st.success(f"✅ Produto {nome_prod} cadastrado com sucesso!")
+                else:
+                    st.error("⚠️ Preencha nome e preço para cadastrar.")
+
+
+# ---------- Tela de Resumo ----------
 def tela_resumo():
-    st.title("📊 Resumo")
-    vendas = st.session_state.get("vendas", [])
+    st.header("📊 Resumo de Vendas")
+
+    vendas = st.session_state.db.get("vendas", [])
     if not vendas:
         st.info("Nenhuma venda registrada ainda.")
         return
 
-    total = sum(v["total"] for v in vendas)
-    st.metric("Total de vendas registradas", f"R$ {total:,.2f}")
+    total = sum(v["preco"] * v["quantidade"] for v in vendas)
+    st.write(f"### 💰 Total vendido: R$ {total:.2f}")
 
-    for v in vendas:
-        with st.expander(f"{v['cliente']} - {v['data']} - R$ {v['total']:.2f}"):
-            for p in v["produtos"]:
-                st.write(f"- {p['nome']} (Ref {p['codigo']}): R$ {p['preco']:.2f}")
-
-# ---------------- Tela Registrar Venda Manual ----------------
-def tela_registrar_venda():
-    st.title("🛒 Registrar Venda (Manual)")
-
-    clientes = list(st.session_state.get("clientes", {}).keys())
-    if not clientes:
-        st.warning("Não há clientes cadastrados. Cadastre um cliente primeiro.")
-        return
-
-    cliente = st.selectbox("Selecione o cliente", options=clientes)
-
-    carrinho = st.session_state.get("carrinho", [])
-
-    produto_keys = list(st.session_state.get("produtos", {}).keys())
-    if not produto_keys:
-        st.warning("Não há produtos cadastrados. Cadastre um produto primeiro.")
-        return
-
-    produto_sel = st.selectbox(
-        "Selecione o produto",
-        options=[f"{cod} - {st.session_state['produtos'][cod]['nome']} (R$ {st.session_state['produtos'][cod]['preco']:.2f})" for cod in produto_keys]
-    )
-
-    cod_produto = int(produto_sel.split(" - ")[0])
-    produto = st.session_state["produtos"][cod_produto]
-
-    if st.button("Adicionar ao carrinho"):
-        carrinho.append({"codigo": cod_produto, "nome": produto["nome"], "preco": produto["preco"]})
-        st.session_state.carrinho = carrinho
-
-    st.subheader("Carrinho")
-    if carrinho:
-        for i, p in enumerate(carrinho):
-            col1, col2 = st.columns([3, 1])
-            col1.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
-            if col2.button("Remover", key=f"rem_{i}"):
-                carrinho.pop(i)
-                st.session_state.carrinho = carrinho
-                st.experimental_rerun()
-
-        total = sum(p["preco"] for p in carrinho)
-        st.write(f"**Total: R$ {total:.2f}**")
-
-        if st.button("Finalizar venda"):
-            nova_venda = {
-                "cliente": cliente,
-                "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                "produtos": carrinho.copy(),
-                "total": total
-            }
-            st.session_state.vendas.append(nova_venda)
-            st.session_state.carrinho = []
-            st.success("Venda registrada com sucesso!")
-            st.experimental_rerun()
-    else:
-        st.info("Nenhum produto no carrinho ainda.")
-
-# ---------------- Tela Registrar Venda por Foto ----------------
-def tela_registrar_venda_foto():
-    st.title("📷 Registrar Venda (Por Foto)")
-
-    # Seleção ou cadastro do cliente
-    clientes = list(st.session_state.get("clientes", {}).keys())
-    novo_cliente = st.text_input("Novo cliente (opcional)")
-    if novo_cliente:
-        if novo_cliente not in st.session_state["clientes"]:
-            st.session_state["clientes"][novo_cliente] = []
-            st.success(f"Cliente '{novo_cliente}' cadastrado.")
-    cliente_sel = st.selectbox("Selecione o cliente", options=clientes + ([novo_cliente] if novo_cliente else []))
-
-    # Upload de até 10 fotos
-    uploaded_files = st.file_uploader("Envie até 10 fotos das etiquetas", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-    if uploaded_files:
-        if len(uploaded_files) > 10:
-            st.warning("O máximo permitido é 10 fotos.")
-            return
-
-        carrinho_foto = st.session_state.get("carrinho_foto", [])
-
-        for uploaded_file in uploaded_files:
-            img = Image.open(uploaded_file)
-            img_proc = img.convert("L")
-            img_proc = img_proc.filter(ImageFilter.SHARPEN)
-            img_proc = ImageEnhance.Contrast(img_proc).enhance(2)
-
-            texto = pytesseract.image_to_string(img_proc, lang="por")
-            st.text_area(f"Texto detectado ({uploaded_file.name}):", texto, height=150)
-
-            # Extrair código, nome e preço
-            ref_match = re.search(r"Ref\.?\s*(\d+)", texto, re.IGNORECASE)
-            codigo = int(ref_match.group(1)) if ref_match else None
-
-            preco_match = re.search(r"(\d{1,3}[.,]\d{2})", texto)
-            preco = float(preco_match.group(1).replace(",", ".")) if preco_match else None
-
-            nome_match = re.search(r"(SOUTIEN.*|CALCINHA.*|CAMISE.*|PRODUTO.*)", texto, re.IGNORECASE)
-            nome = nome_match.group(0).strip() if nome_match else ""
-
-            # Checar se código existe
-            if codigo in st.session_state["produtos"]:
-                produto_nome = st.session_state["produtos"][codigo]["nome"]
-                st.info(f"Produto cadastrado: {produto_nome} - R$ {st.session_state['produtos'][codigo]['preco']:.2f}")
-            else:
-                st.warning(f"Produto não cadastrado. Código: {codigo}")
-                novo_nome = st.text_input(f"Nome do produto para cadastrar (Código {codigo})", value=nome)
-                novo_preco = st.text_input(f"Preço do produto (R$) para cadastrar (Código {codigo})", value=preco if preco else "")
-                if st.button(f"Cadastrar produto {codigo}"):
-                    if novo_nome and novo_preco:
-                        st.session_state["produtos"][codigo] = {"nome": novo_nome, "preco": float(novo_preco)}
-                        st.success(f"Produto {novo_nome} cadastrado com sucesso.")
-
-            if codigo and preco:
-                carrinho_foto.append({"codigo": codigo, "nome": nome, "preco": preco})
-                st.session_state.carrinho_foto = carrinho_foto
-
-    # Mostrar carrinho
-    st.subheader("Carrinho (Foto)")
-    carrinho_foto = st.session_state.get("carrinho_foto", [])
-    if carrinho_foto:
-        for i, p in enumerate(carrinho_foto):
-            col1, col2 = st.columns([3, 1])
-            col1.write(f"{p['nome']} (Ref {p['codigo']}) - R$ {p['preco']:.2f}")
-            if col2.button("Remover", key=f"rem_foto_{i}"):
-                carrinho_foto.pop(i)
-                st.session_state.carrinho_foto = carrinho_foto
-                st.experimental_rerun()
-
-        total = sum(p["preco"] for p in carrinho_foto)
-        st.write(f"**Total: R$ {total:.2f}**")
-
-        if st.button("Finalizar venda por foto"):
-            nova_venda = {
-                "cliente": cliente_sel,
-                "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                "produtos": carrinho_foto.copy(),
-                "total": total
-            }
-            st.session_state.vendas.append(nova_venda)
-            st.session_state.carrinho_foto = []
-            st.success("Venda registrada com sucesso!")
-            st.experimental_rerun()
-    else:
-        st.info("Nenhum produto no carrinho ainda.")
-
-# ---------------- Tela Clientes ----------------
-def tela_clientes():
-    st.title("👥 Clientes")
-    clientes = st.session_state.get("clientes", {})
-
-    novo_cliente = st.text_input("Adicionar novo cliente")
-    if st.button("Adicionar cliente"):
-        if novo_cliente and novo_cliente not in clientes:
-            clientes[novo_cliente] = []
-            st.success("Cliente adicionado.")
-            st.experimental_rerun()
-
-    for cliente in clientes.keys():
-        with st.expander(cliente):
-            col1, col2 = st.columns([1, 1])
-            if col1.button("Renomear", key=f"ren_{cliente}"):
-                novo_nome = st.text_input(f"Novo nome para {cliente}", key=f"in_ren_{cliente}")
-                if st.button("Salvar", key=f"salvar_{cliente}"):
-                    clientes[novo_nome] = clientes.pop(cliente)
-                    st.success("Cliente renomeado.")
-                    st.experimental_rerun()
-            if col2.button("Apagar", key=f"del_{cliente}"):
-                del clientes[cliente]
-                st.warning("Cliente removido.")
-                st.experimental_rerun()
-
-# ---------------- Tela Produtos ----------------
-def tela_produtos():
-    st.title("📦 Produtos")
-    produtos = st.session_state.get("produtos", {})
-
-    codigo = st.text_input("Código do produto")
-    nome = st.text_input("Nome do produto")
-    preco = st.number_input("Preço", min_value=0.0, format="%.2f")
-
-    if st.button("Adicionar produto"):
-        if codigo and nome and preco > 0:
-            produtos[int(codigo)] = {"nome": nome, "preco": preco}
-            st.success("Produto adicionado.")
-            st.experimental_rerun()
-
-    for cod, p in produtos.items():
-        st.write(f"{p['nome']} (Ref {cod}) - R$ {p['preco']:.2f}")
-
-# ---------------- Tela Relatórios ----------------
-def tela_relatorios():
-    st.title("📑 Relatórios")
-    vendas = st.session_state.get("vendas", [])
-    if not vendas:
-        st.info("Nenhuma venda registrada.")
-        return
-
-    for v in vendas:
-        st.write(f"{v['cliente']} - {v['data']} - R$ {v['total']:.2f}")
-
-# ---------------- Tela Acessos ----------------
-def tela_acessos():
-    st.title("🔐 Acessos")
-    try:
-        with open("acessos.log", "r", encoding="utf-8") as f:
-            st.text(f.read())
-    except:
-        st.info("Nenhum acesso registrado ainda.")
+    st.table(vendas)
 # ==========================
 # Parte 3 - Barra lateral, login e roteamento
 # ==========================
