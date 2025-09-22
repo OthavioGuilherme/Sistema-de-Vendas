@@ -182,6 +182,7 @@ def tela_produtos():
             if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
 # ================== PARTE 3 ==================
+# ================== PARTE 3 ==================
 # ================== Clientes ==================
 def tela_clientes():
     st.header("👥 Clientes")
@@ -255,7 +256,7 @@ def tela_clientes():
                     vendas.pop(idx)
                     st.session_state["clientes"][cliente] = vendas
                     save_db()
-                    st.session_state["recarregar"] = not st.session_state["recarregar"]
+                    st.session_state["recarregar"] = not st.session_state.get("recarregar", False)
                 nova_qtd = col3.number_input("Editar Qtde", min_value=1, value=v["quantidade"], key=f"editar_{cliente}_{idx}")
                 if col3.button("Salvar", key=f"salvar_{cliente}_{idx}"):
                     vendas[idx]["quantidade"] = nova_qtd
@@ -269,7 +270,7 @@ def tela_clientes():
                     st.session_state["clientes"].pop(cliente)
                     save_db()
                     st.success(f"Cliente {cliente} apagado!")
-                    st.session_state["recarregar"] = not st.session_state["recarregar"]
+                    st.session_state["recarregar"] = not st.session_state.get("recarregar", False)
 
 # ================== Relatórios ==================
 def relatorio_geral():
@@ -327,18 +328,22 @@ def barra_lateral():
     if not is_visitante():
         opcoes["Backup 🗂️"] = bloco_backup_sidebar
     opcoes["Sair 🚪"] = None
-    menu_selecionado = st.sidebar.selectbox("Menu", list(opcoes.keys()), index=list(opcoes.keys()).index(st.session_state.get("menu", "Resumo 📊")))
+    menu_selecionado = st.sidebar.selectbox(
+        "Menu",
+        list(opcoes.keys()),
+        index=list(opcoes.keys()).index(st.session_state.get("menu", "Resumo 📊"))
+    )
     st.session_state["menu"] = menu_selecionado
     func = opcoes.get(menu_selecionado)
     if func:
         func()
     elif menu_selecionado == "Sair 🚪":
         st.session_state.clear()
-        st.session_state["recarregar"] = not st.session_state["recarregar"]
+        st.session_state["recarregar"] = not st.session_state.get("recarregar", False)
 
 # ================== Main ==================
 def main():
-    if st.session_state["usuario"] is None:
+    if st.session_state.get("usuario") is None:
         login()
         st.stop()
     barra_lateral()
