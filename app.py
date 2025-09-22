@@ -211,12 +211,31 @@ def tela_clientes():
 
     if cliente:
         st.subheader(f"{cliente}")
-        # Lista de vendas
         vendas = st.session_state["clientes"][cliente]
         if vendas:
             st.write("Vendas registradas:")
             for v in vendas:
                 st.write(f"- {v['quantidade']}x {v['nome']} (R$ {v['preco']:.2f})")
+        else:
+            st.info("Nenhuma venda registrada ainda.")
+
+        # Registrar venda
+        st.markdown("### ➕ Registrar Venda")
+        produtos_disponiveis = st.session_state["produtos"]
+
+        # Criar lista de strings com código + nome
+        lista_produtos = [f"{cod} - {p['nome']}" for cod, p in produtos_disponiveis.items()]
+        produto_selecionado = st.selectbox("Escolha o produto", lista_produtos)
+
+        if produto_selecionado:
+            cod_prod = int(produto_selecionado.split(" - ")[0])
+            produto = produtos_disponiveis[cod_prod]
+            quantidade = st.number_input("Quantidade", min_value=1, step=1)
+            if st.button("Registrar venda"):
+                venda = {"nome": produto["nome"], "preco": produto["preco"], "quantidade": quantidade}
+                st.session_state["clientes"][cliente].append(venda)
+                save_db()
+                st.success(f"Venda registrada: {quantidade}x {produto['nome']}")
         else:
             st.info("Nenhuma venda registrada ainda.")
 
