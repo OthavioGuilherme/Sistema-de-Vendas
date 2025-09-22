@@ -96,6 +96,27 @@ def login():
                 st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
                 st.session_state["recarregar"] = not st.session_state["recarregar"]
 
+# ================== Telas principais ==================
+def tela_resumo():
+    st.header("📊 Resumo de Vendas")
+    total_geral = 0
+    for cliente, vendas in st.session_state["clientes"].items():
+        total_cliente = sum(v["preco"]*v["quantidade"] for v in vendas)
+        total_geral += total_cliente
+    comissao = total_geral * 0.25
+    st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
+    st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
+
+def tela_pdf():
+    st.header("📄 Importar Estoque via Nota Fiscal (PDF)")
+    if is_visitante():
+        st.info("🔒 Apenas usuários logados podem importar PDF.")
+        return
+    pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
+    if pdf_file is not None:
+        if st.button("Substituir estoque pelo PDF"):
+            substituir_estoque_pdf(pdf_file)
+
 # ================== PDF ==================
 def substituir_estoque_pdf(uploaded_file):
     data = uploaded_file.read()
@@ -154,7 +175,6 @@ def tela_produtos():
             if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
 # ================== PARTE 3 ==================
-
 # ================== Clientes ==================
 def tela_clientes():
     st.header("👥 Clientes")
@@ -165,7 +185,6 @@ def tela_clientes():
         st.info("🔒 Visitantes não podem cadastrar clientes.")
         return
     
-    # Cadastrar cliente
     if aba == "Cadastrar cliente":
         nome = st.text_input("Nome do cliente", key="nome_cliente")
         if st.button("Salvar cliente"):
@@ -179,7 +198,6 @@ def tela_clientes():
                 st.success(f"Cliente {nome} cadastrado!")
         return
     
-    # Consultar cliente
     filtro = st.text_input("Buscar cliente (2+ letras)", key="buscar_cliente").lower()
     matches = [c for c in st.session_state["clientes"] if filtro in c.lower()]
     cliente = st.selectbox("Selecione o cliente", matches) if matches else None
@@ -188,13 +206,8 @@ def tela_clientes():
         st.subheader(f"{cliente}")
         vendas = st.session_state["clientes"][cliente]
         
-        # Adicionar venda
         st.markdown("### ➕ Adicionar Venda")
-        produto_input = st.text_input(
-            "Digite código ou nome do produto",
-            key=f"venda_produto_{cliente}",
-            placeholder="Ex: 101 ou Caneta"
-        )
+        produto_input = st.text_input("Digite código ou nome do produto", key=f"venda_produto_{cliente}")
         opcoes_produtos = [
             f"{cod} - {p['nome']}" for cod, p in st.session_state["produtos"].items()
             if produto_input.lower() in str(cod) or produto_input.lower() in p["nome"].lower()
@@ -209,9 +222,8 @@ def tela_clientes():
                 vendas.append({"cod": cod, "nome": p["nome"], "preco": p["preco"], "quantidade": quantidade})
                 st.session_state["clientes"][cliente] = vendas
                 save_db()
-                st.success(f"Venda de {quantidade} x {p['nome']} adicionada ao cliente {cliente}!")
+                st.success(f"Venda adicionada ao cliente {cliente}!")
 
-        # Listar vendas com opção apagar/editar
         if vendas:
             st.markdown("### 📝 Vendas do Cliente")
             for idx, v in enumerate(vendas):
@@ -221,15 +233,12 @@ def tela_clientes():
                     vendas.pop(idx)
                     st.session_state["clientes"][cliente] = vendas
                     save_db()
-                    st.experimental_rerun()
+                    st.session_state["recarregar"] = not st.session_state["recarregar"]
                 nova_qtd = col3.number_input("Editar Qtde", min_value=1, value=v["quantidade"], key=f"editar_{cliente}_{idx}")
                 if col3.button("Salvar", key=f"salvar_{cliente}_{idx}"):
                     vendas[idx]["quantidade"] = nova_qtd
-                    st.session_state["clientes"][cliente] = vendas
                     save_db()
                     st.success("Venda atualizada")
-        else:
-            st.write("Nenhuma venda registrada.")
 
 # ================== Relatórios ==================
 def relatorio_geral():
@@ -248,17 +257,8 @@ def relatorio_geral():
 def bloco_backup_sidebar():
     st.sidebar.markdown("---")
     st.sidebar.subheader("🧰 Backup")
-    # Exportar
-    db_json = json.dumps({
-        "produtos": st.session_state["produtos"],
-        "clientes": st.session_state["clientes"]
-    }, ensure_ascii=False, indent=2)
-    st.sidebar.download_button(
-        "⬇️ Exportar backup (.json)",
-        data=db_json.encode("utf-8"),
-        file_name="backup_sistema_vendas.json"
-    )
-    # Restaurar
+    db_json = json.dumps({"produtos": st.session_state["produtos"], "clientes": st.session_state["clientes"]}, ensure_ascii=False, indent=2)
+    st.sidebar.download_button("⬇️ Exportar backup (.json)", data=db_json.encode("utf-8"), file_name="backup_sistema_vendas.json")
     if not is_visitante():
         up = st.sidebar.file_uploader("⬆️ Restaurar backup (.json)", type=["json"])
         if up is not None:
@@ -277,7 +277,6 @@ def bloco_backup_sidebar():
 
 def barra_lateral():
     st.sidebar.markdown(f"**Usuário:** {st.session_state['usuario']}")
-    
     opcoes = {
         "Resumo 📊": tela_resumo,
         "Upload PDF 📄": tela_pdf,
@@ -288,37 +287,14 @@ def barra_lateral():
     if not is_visitante():
         opcoes["Backup 🗂️"] = bloco_backup_sidebar
     opcoes["Sair 🚪"] = None
-
-    menu_selecionado = st.sidebar.selectbox(
-        "Menu",
-        list(opcoes.keys()),
-        index=list(opcoes.keys()).index(st.session_state.get("menu", "Resumo 📊"))
-    )
+    menu_selecionado = st.sidebar.selectbox("Menu", list(opcoes.keys()), index=list(opcoes.keys()).index(st.session_state.get("menu", "Resumo 📊")))
     st.session_state["menu"] = menu_selecionado
-
     func = opcoes.get(menu_selecionado)
     if func:
         func()
     elif menu_selecionado == "Sair 🚪":
         st.session_state.clear()
-        st.experimental_rerun()
-
-# ================== Roteador ==================
-def roteador():
-    menu = st.session_state.get("menu", "Resumo 📊")
-    if menu == "Resumo 📊":
-        tela_resumo()
-    elif menu == "Upload PDF 📄":
-        tela_pdf()
-    elif menu == "Clientes 👥":
-        tela_clientes()
-    elif menu == "Produtos 📦":
-        tela_produtos()
-    elif menu == "Relatórios 📋":
-        relatorio_geral()
-    elif menu == "Backup 🗂️":
-        st.header("🗂️ Backup")
-        st.info("Use a lateral para exportar ou restaurar backup.")
+        st.session_state["recarregar"] = not st.session_state["recarregar"]
 
 # ================== Main ==================
 def main():
@@ -326,7 +302,6 @@ def main():
         login()
         st.stop()
     barra_lateral()
-    roteador()
 
 if __name__ == "__main__":
     main()
