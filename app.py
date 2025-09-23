@@ -120,12 +120,15 @@ def tela_resumo():
         st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
         st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
 
-# ================== PDF (opcional) ==================
+# ================== PDF (Importar Estoque) ==================
 def substituir_estoque_pdf(uploaded_file):
     data = uploaded_file.read()
     stream = io.BytesIO(data)
     novos_produtos = {}
-    linha_regex = re.compile(r'^\s*(\d+)\s+(.+?)\s+([\d.,]+)\s*$')
+
+    # Regex adaptado ao layout da sua nota: quantidade, código (5 dígitos), nome e preço
+    linha_regex = re.compile(r'^\s*(\d+)\s+(\d{5})\s+(.+?)\s+([\d.,]+)\s*$')
+
     try:
         with pdfplumber.open(stream) as pdf:
             for page in pdf.pages:
@@ -135,7 +138,11 @@ def substituir_estoque_pdf(uploaded_file):
                 for linha in text.splitlines():
                     m = linha_regex.match(linha.strip())
                     if m:
-                        cod_s, nome, preco_s = m.groups()
+                        qtd_s, cod_s, nome, preco_s = m.groups()
+                        try:
+                            qtd = int(qtd_s)
+                        except:
+                            qtd = 0
                         try:
                             cod = int(cod_s)
                         except:
@@ -145,7 +152,11 @@ def substituir_estoque_pdf(uploaded_file):
                         except:
                             preco = 0.0
                         if cod is not None:
-                            novos_produtos[cod] = {"nome": nome.title(), "preco": preco, "quantidade": 10}  # estoque inicial
+                            novos_produtos[cod] = {
+                                "nome": nome.title(),
+                                "preco": preco,
+                                "quantidade": qtd
+                            }
     except Exception as e:
         st.error(f"Erro ao ler PDF: {e}")
         return
@@ -155,12 +166,16 @@ def substituir_estoque_pdf(uploaded_file):
         return
     st.session_state["produtos"] = novos_produtos
     save_db()
-    st.success("Estoque atualizado a partir do PDF!")
+    st.success("✅ Estoque atualizado a partir do PDF!")
 
 # ================== Produtos ==================
 def adicionar_produto_manual(cod, nome, preco, qtd=10):
     cod = int(cod)
-    st.session_state["produtos"][cod] = {"nome": nome.strip(), "preco": float(preco), "quantidade": qtd}
+    st.session_state["produtos"][cod] = {
+        "nome": nome.strip(),
+        "preco": float(preco),
+        "quantidade": qtd
+    }
     save_db()
     st.success(f"Produto {nome} adicionado/atualizado!")
 
