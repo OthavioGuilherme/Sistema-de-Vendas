@@ -102,7 +102,7 @@ def login():
                     st.session_state["usuario"] = f"visitante-{nome.strip()}"
                     registrar_acesso(f"login-visitante:{nome.strip()}")
                     st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
-                    st.experimental_rerun()
+                    st.rerun()
 
 # ================== Tela de Resumo ==================
 def tela_resumo():
@@ -236,7 +236,7 @@ def tela_clientes():
         if cols[1].button("Ver Vendas", key=f"vervendas_{cliente}"):
             st.session_state["venda_cliente_selecionado"] = cliente
             st.session_state["menu_aba_selecionada"] = "Vendas 💰"
-            st.experimental_rerun()
+            st.rerun()
         # apagar com confirmação
         if not visitante:
             confirmar_key = f"confirm_apagar_{cliente}"
@@ -248,7 +248,7 @@ def tela_clientes():
                     if st.session_state.get("venda_cliente_selecionado") == cliente:
                         st.session_state.pop("venda_cliente_selecionado", None)
                     st.success(f"Cliente {cliente} apagado!")
-                    st.experimental_rerun()
+                    st.rerun()
         else:
             cols[2].button("Apagar", key=f"disabled_apagar_{cliente}", disabled=True)
 
@@ -294,7 +294,7 @@ def tela_vendas():
                     st.session_state["clientes"][cliente_sel] = vendas
                     save_db()
                     st.success(f"Venda adicionada ao cliente {cliente_sel}!")
-                    st.experimental_rerun()
+                    st.rerun()
             else:
                 st.warning("Escolha um produto válido.")
     else:
@@ -322,7 +322,7 @@ def tela_vendas():
                 st.session_state["produtos"][cod]["quantidade"] += quantidade  # devolve ao estoque
                 save_db()
                 st.success("Venda apagada")
-                st.experimental_rerun()
+                st.rerun()
             nova_qtd = col3.number_input("Qtde", min_value=1, value=quantidade, key=f"editar_{cliente_sel}_{idx}")
             if col3.button("Salvar", key=f"salvar_{cliente_sel}_{idx}"):
                 diff = nova_qtd - quantidade
@@ -334,7 +334,7 @@ def tela_vendas():
                     st.session_state["clientes"][cliente_sel] = vendas
                     save_db()
                     st.success("Venda atualizada")
-                    st.experimental_rerun()
+                    st.rerun()
 
 # ================== Relatórios ==================
 def tela_relatorios():
@@ -374,7 +374,7 @@ def main_tabs():
         if st.button("🚪 Sair"):
             st.session_state.clear()
             st.session_state["usuario"] = None
-            st.experimental_rerun()
+            st.rerun()
 
 # ================== MAIN ==================
 def main():
