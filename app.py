@@ -121,19 +121,6 @@ def tela_resumo():
         st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
 
 # ================== PDF (opcional) ==================
-def tela_pdf():
-    st.header("📄 Importar Estoque via Nota Fiscal (PDF)")
-    if is_visitante():
-        st.info("🔒 Apenas usuários logados podem importar PDF.")
-        return
-    if pdfplumber is None:
-        st.warning("A biblioteca pdfplumber não está disponível no ambiente.")
-        return
-    pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
-    if pdf_file is not None:
-        if st.button("Substituir estoque pelo PDF"):
-            substituir_estoque_pdf(pdf_file)
-
 def substituir_estoque_pdf(uploaded_file):
     data = uploaded_file.read()
     stream = io.BytesIO(data)
@@ -180,7 +167,7 @@ def adicionar_produto_manual(cod, nome, preco, qtd=10):
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
-    acao = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True)
+    acao = st.radio("Ação", ["Listar/Buscar", "Adicionar", "Importar PDF"], horizontal=True)
 
     if acao == "Adicionar":
         if visitante:
@@ -197,12 +184,22 @@ def tela_produtos():
                 st.warning("Informe um nome válido.")
             else:
                 adicionar_produto_manual(cod, nome, preco, quantidade)
-    else:
+
+    elif acao == "Listar/Buscar":
         termo = st.text_input("Buscar por nome ou código").lower()
         st.subheader("Lista de Produtos")
         for cod, dados in sorted(st.session_state["produtos"].items(), key=lambda x: str(x[0])):
             if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f}) | Estoque: {dados.get('quantidade', 0)}")
+
+    elif acao == "Importar PDF":
+        if visitante:
+            st.info("🔒 Visitantes não podem importar PDF.")
+            return
+        pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
+        if pdf_file is not None:
+            if st.button("Substituir estoque pelo PDF"):
+                substituir_estoque_pdf(pdf_file)
 # ================== PARTE 3 ==================
 # ================== Clientes ==================
 def tela_clientes():
