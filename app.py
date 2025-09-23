@@ -370,4 +370,8 @@ def main_tabs():
 def main():
     if st.session_state.get("usuario") is None:
         login()
-   
+    else:
+        main_tabs()
+
+if __name__ == "__main__":
+    main()
