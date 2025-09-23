@@ -40,6 +40,7 @@ def save_db():
         st.warning(f"Falha ao salvar DB: {e}")
 
 def load_db():
+    # retorna (produtos_dict, clientes_dict)
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
@@ -56,8 +57,12 @@ def load_db():
             pass
     # default (se não existir DB)
     default_clients = {
-        "Tabata": [], "Valquiria": [], "Vanessa": [],
-        "Pamela": [], "Elan": [], "Claudinha": []
+        "Tabata": [],
+        "Valquiria": [],
+        "Vanessa": [],
+        "Pamela": [],
+        "Elan": [],
+        "Claudinha": [],
     }
     return {}, default_clients
 
@@ -68,8 +73,7 @@ if "produtos" not in st.session_state or not st.session_state["produtos"]:
     prods_loaded, clients_loaded = load_db()
     st.session_state["produtos"] = prods_loaded or {}
     st.session_state["clientes"] = clients_loaded or {
-        "Tabata": [], "Valquiria": [], "Vanessa": [],
-        "Pamela": [], "Elan": [], "Claudinha": []
+        "Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []
     }
 if "menu" not in st.session_state:
     st.session_state["menu"] = "Resumo 📊"
@@ -84,7 +88,7 @@ def is_visitante():
 # ================== Login ==================
 def login():
     st.title("🔐 Login")
-    escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
+    escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True, index=0, key="login_radio")
 
     if escolha == "Usuário cadastrado":
         usuario = st.text_input("Usuário", key="login_usuario")
@@ -183,7 +187,7 @@ def adicionar_produto_manual(cod, nome, preco):
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
-    acao = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True)
+    acao = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True, key="produtos_radio")
 
     if acao == "Adicionar":
         if visitante:
@@ -206,69 +210,193 @@ def tela_produtos():
             if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
 
+# ================== Relatórios ==================
+def tela_relatorios():
+    st.header("📊 Relatórios")
+
+    if is_visitante():
+        st.warning("Visitante não pode ver os valores de vendas e comissão.")
+        if "clientes" in st.session_state:
+            for cliente, vendas in st.session_state["clientes"].items():
+                st.write(f"Cliente: {cliente}")
+                for v in vendas:
+                    nome = v.get("nome", "Produto")
+                    qtd = v.get("quantidade", 0)
+                    st.write(f"- {nome} x {qtd} (R$ **** cada)")
+        return
+
+    total_geral = 0.0
+    for cliente, vendas in st.session_state["clientes"].items():
+        total_cliente = sum((v.get("preco", 0.0) * v.get("quantidade", 0)) for v in vendas)
+        st.subheader(f"Cliente: {cliente} — Total R$ {total_cliente:.2f}")
+        for v in vendas:
+            valor_exibir = f"R$ {v.get('preco',0.0):.2f}"
+            st.write(f"- {v.get('nome','?')} x {v.get('quantidade',0)} ({valor_exibir} cada)")
+        total_geral += total_cliente
+
+    comissao = total_geral * 0.25
+    st.success(f"💰 Total Geral: R$ {total_geral:.2f} | Comissão: R$ {comissao:.2f}")
 # ================== PARTE 3 ==================
-# ================== PARTE 3 ==================
-# NAVEGAÇÃO E RELATÓRIOS
+# ================== NAVEGAÇÃO (aba moderna com st.tabs) ==================
 
 import streamlit as st
 
-# Função para tela de clientes
+# Tela Clientes (com opção de apagar com confirmação)
 def tela_clientes():
-    st.header("👫 Clientes")
-    if "clientes" not in st.session_state:
-        st.session_state["clientes"] = {}
+    st.header("👥 Clientes")
+    visitante = is_visitante()
 
-    with st.form("form_cliente"):
-        nome = st.text_input("Nome do Cliente")
-        if st.form_submit_button("Cadastrar"):
-            if nome:
-                if nome not in st.session_state["clientes"]:
-                    st.session_state["clientes"][nome] = []
-                    st.success(f"Cliente {nome} cadastrado com sucesso!")
+    # cadastro
+    if visitante:
+        st.info("🔒 Visitantes não podem cadastrar clientes.")
+    else:
+        with st.form("form_cliente"):
+            nome = st.text_input("Nome do Cliente", key="form_cliente_nome")
+            if st.form_submit_button("Cadastrar"):
+                if not nome.strip():
+                    st.warning("Informe um nome válido.")
+                elif nome.strip() in st.session_state["clientes"]:
+                    st.warning("Cliente já existe.")
                 else:
-                    st.warning("Esse cliente já existe.")
+                    st.session_state["clientes"][nome.strip()] = []
+                    save_db()
+                    st.success(f"Cliente {nome.strip()} cadastrado!")
 
+    st.markdown("---")
     st.subheader("Lista de Clientes")
+    if not st.session_state["clientes"]:
+        st.info("Nenhum cliente cadastrado.")
     for cliente in list(st.session_state["clientes"].keys()):
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.write(cliente)
-        with col2:
-            if st.button(f"Apagar {cliente}"):
-                del st.session_state["clientes"][cliente]
-                st.success(f"Cliente {cliente} removido!")
+        cols = st.columns([4,1,1])
+        cols[0].write(cliente)
+        # botão visualizar (leva à aba de Vendas via alteração de estado)
+        if cols[1].button("Ver Vendas", key=f"vervendas_{cliente}"):
+            # guarda cliente selecionado para tela de vendas
+            st.session_state["venda_cliente_selecionado"] = cliente
+            # muda para aba Vendas (index 3 below); we'll set menu key
+            st.session_state["menu_aba_selecionada"] = "Vendas 💰"
+            st.rerun()
+        # apagar com confirmação
+        if not visitante:
+            confirmar_key = f"confirm_apagar_{cliente}"
+            # mostramos checkbox (default False) e só então o botão apagar
+            confirmar = cols[2].checkbox("Confirmar", key=confirmar_key)
+            if confirmar:
+                if cols[2].button(f"🗑️ Apagar", key=f"btn_apagar_{cliente}"):
+                    st.session_state["clientes"].pop(cliente, None)
+                    save_db()
+                    st.success(f"Cliente {cliente} apagado!")
+                    # limpa seleção de venda se era esse cliente
+                    if st.session_state.get("venda_cliente_selecionado") == cliente:
+                        st.session_state.pop("venda_cliente_selecionado", None)
+                    st.rerun()
+        else:
+            cols[2].button("Apagar", key=f"disabled_apagar_{cliente}", disabled=True)
+
+# Tela Vendas (registro e edição)
+def tela_vendas():
+    st.header("💰 Vendas")
+    visitante = is_visitante()
+
+    # escolher cliente
+    clientes = list(st.session_state["clientes"].keys())
+    if not clientes:
+        st.info("Nenhum cliente cadastrado. Cadastre um cliente primeiro.")
+        return
+
+    cliente_sel = st.selectbox("Selecione o cliente", clientes, index=(clientes.index(st.session_state.get("venda_cliente_selecionado")) if st.session_state.get("venda_cliente_selecionado") in clientes else 0), key="select_cliente_venda")
+
+    vendas = st.session_state["clientes"].get(cliente_sel, [])
+
+    st.markdown("### ➕ Adicionar Venda")
+    if visitante:
+        st.info("🔒 Visitantes não podem adicionar vendas.")
+    else:
+        produto_input = st.text_input("Buscar produto por código ou nome", key="venda_busca_produto")
+        opcoes_produtos = [
+            f"{cod} - {p['nome']}" for cod, p in st.session_state["produtos"].items()
+            if produto_input.lower() in str(cod) or produto_input.lower() in p["nome"].lower()
+        ]
+        if opcoes_produtos:
+            produto_selecionado = st.selectbox("Produto", [""] + opcoes_produtos, key="venda_select_produto")
+        else:
+            produto_selecionado = None
+        quantidade = st.number_input("Quantidade", min_value=1, step=1, key="venda_qtd")
+        if st.button("Adicionar venda", key="btn_adicionar_venda"):
+            if produto_selecionado and produto_selecionado != "":
+                cod = int(produto_selecionado.split(" - ")[0])
+                p = st.session_state["produtos"][cod]
+                vendas.append({"cod": cod, "nome": p["nome"], "preco": p["preco"], "quantidade": quantidade})
+                st.session_state["clientes"][cliente_sel] = vendas
+                save_db()
+                st.success(f"Venda adicionada ao cliente {cliente_sel}!")
+                st.rerun()
+            else:
+                st.warning("Escolha um produto válido.")
+
+    st.markdown("### 📝 Vendas do Cliente")
+    if not vendas:
+        st.info("Nenhuma venda registrada para este cliente.")
+    for idx, v in enumerate(vendas):
+        col1, col2, col3 = st.columns([5,1.5,1.5])
+        cod = v.get("cod")
+        nome = v.get("nome", "???")
+        quantidade = v.get("quantidade", 0)
+        preco = v.get("preco", 0.0)
+        valor_exibir = f"R$ {preco:.2f}" if not visitante else "R$ *****"
+        linha = (f"{cod} - {nome} x {quantidade} ({valor_exibir} cada)" if cod is not None else f"{nome} x {quantidade} ({valor_exibir} cada)")
+        col1.write(linha)
+
+        # ações
+        if visitante:
+            col2.button("Apagar", key=f"apagar_disabled_{cliente_sel}_{idx}", disabled=True)
+            col3.number_input("Qtde", min_value=1, value=quantidade, key=f"editar_disabled_{cliente_sel}_{idx}", disabled=True)
+        else:
+            if col2.button("Apagar", key=f"apagar_{cliente_sel}_{idx}"):
+                vendas.pop(idx)
+                st.session_state["clientes"][cliente_sel] = vendas
+                save_db()
+                st.success("Venda apagada")
+                st.rerun()
+            nova_qtd = col3.number_input("Qtde", min_value=1, value=quantidade, key=f"editar_{cliente_sel}_{idx}")
+            if col3.button("Salvar", key=f"salvar_{cliente_sel}_{idx}"):
+                vendas[idx]["quantidade"] = nova_qtd
+                st.session_state["clientes"][cliente_sel] = vendas
+                save_db()
+                st.success("Venda atualizada")
                 st.rerun()
 
-# Menu no topo
-def menu_topo():
-    st.markdown("## 🛒 Sistema de Vendas")
+# Tela Relatórios está em Parte 2 (tela_relatorios)
 
-    escolha = st.radio(
-        "Navegação:",
-        ["Resumo 📊", "Clientes 👫", "Produtos 📦", "Vendas 💰", "Relatórios 📊", "Sair 🚪"],
-        horizontal=True
-    )
+# Configura as abas com st.tabs (visual moderno)
+def main_tabs():
+    # lembre: chamar login antes de tabs
+    tabs = st.tabs(["Resumo 📊", "Clientes 👥", "Produtos 📦", "Vendas 💰", "Relatórios 📋", "Config ⚙️"])
 
-    if escolha == "Resumo 📊":
-        tela_resumo()  # já está implementada na Parte 2
-    elif escolha == "Clientes 👫":
+    with tabs[0]:
+        tela_resumo()
+    with tabs[1]:
         tela_clientes()
-    elif escolha == "Produtos 📦":
-        tela_produtos()  # já está implementada na Parte 2
-    elif escolha == "Vendas 💰":
-        tela_vendas()  # já está implementada na Parte 2
-    elif escolha == "Relatórios 📊":
-        tela_relatorios()  # já está implementada na Parte 2
-    elif escolha == "Sair 🚪":
-        st.session_state.clear()
-        st.session_state["usuario"] = None
-        st.rerun()
+    with tabs[2]:
+        tela_produtos()
+    with tabs[3]:
+        tela_vendas()
+    with tabs[4]:
+        tela_relatorios()
+    with tabs[5]:
+        st.header("⚙️ Configuração")
+        st.write(f"Usuário atual: **{st.session_state.get('usuario', '---')}**")
+        if st.button("🚪 Sair"):
+            st.session_state.clear()
+            st.session_state["usuario"] = None
+            st.rerun()
 
-# Função principal
+# Função principal para ser chamada no fluxo
 def main():
-    if "usuario" not in st.session_state or st.session_state["usuario"] is None:
-        login()  # chama a tela de login da Parte 2
+    if st.session_state.get("usuario") is None:
+        login()
     else:
-        menu_topo()
+        main_tabs()
 
+# roda
 main()
