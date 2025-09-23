@@ -16,7 +16,7 @@ except Exception:
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
 # ================== Usuários (login) ==================
-USERS = {"othavio": "122008", "isabela": "122008"}  # usuários e senhas em texto (simples)
+USERS = {"othavio": "122008", "isabela": "122008"}  # usuários e senhas simples
 LOG_FILE = "acessos.log"
 DB_FILE = "db.json"
 
@@ -40,7 +40,6 @@ def save_db():
         st.warning(f"Falha ao salvar DB: {e}")
 
 def load_db():
-    # retorna (produtos_dict, clientes_dict)
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
@@ -57,12 +56,8 @@ def load_db():
             pass
     # default (se não existir DB)
     default_clients = {
-        "Tabata": [],
-        "Valquiria": [],
-        "Vanessa": [],
-        "Pamela": [],
-        "Elan": [],
-        "Claudinha": [],
+        "Tabata": [], "Valquiria": [], "Vanessa": [],
+        "Pamela": [], "Elan": [], "Claudinha": []
     }
     return {}, default_clients
 
@@ -71,14 +66,13 @@ if "usuario" not in st.session_state:
     st.session_state["usuario"] = None
 if "produtos" not in st.session_state or not st.session_state["produtos"]:
     prods_loaded, clients_loaded = load_db()
-    # se DB vazio, load_db já retornou defaults
     st.session_state["produtos"] = prods_loaded or {}
     st.session_state["clientes"] = clients_loaded or {
-        "Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []
+        "Tabata": [], "Valquiria": [], "Vanessa": [],
+        "Pamela": [], "Elan": [], "Claudinha": []
     }
 if "menu" not in st.session_state:
     st.session_state["menu"] = "Resumo 📊"
-# flag auxiliar (não necessária, mas mantida para compatibilidade)
 if "recarregar" not in st.session_state:
     st.session_state["recarregar"] = False
 
@@ -86,7 +80,6 @@ if "recarregar" not in st.session_state:
 def is_visitante():
     u = st.session_state.get("usuario")
     return isinstance(u, str) and u.startswith("visitante-")
-
 # ================== PARTE 2 ==================
 # ================== Login ==================
 def login():
@@ -214,9 +207,8 @@ def tela_produtos():
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
 
 # ================== PARTE 3 ==================
-# ====================
-# PARTE 3 - NAVEGAÇÃO E RELATÓRIOS
-# ====================
+# ================== PARTE 3 ==================
+# NAVEGAÇÃO E RELATÓRIOS
 
 import streamlit as st
 
@@ -230,12 +222,15 @@ def tela_clientes():
         nome = st.text_input("Nome do Cliente")
         if st.form_submit_button("Cadastrar"):
             if nome:
-                st.session_state["clientes"][nome] = []
-                st.success(f"Cliente {nome} cadastrado com sucesso!")
+                if nome not in st.session_state["clientes"]:
+                    st.session_state["clientes"][nome] = []
+                    st.success(f"Cliente {nome} cadastrado com sucesso!")
+                else:
+                    st.warning("Esse cliente já existe.")
 
     st.subheader("Lista de Clientes")
     for cliente in list(st.session_state["clientes"].keys()):
-        col1, col2 = st.columns([3,1])
+        col1, col2 = st.columns([3, 1])
         with col1:
             st.write(cliente)
         with col2:
@@ -244,53 +239,26 @@ def tela_clientes():
                 st.success(f"Cliente {cliente} removido!")
                 st.rerun()
 
-# Função para tela de produtos
-def tela_produtos():
-    st.header("📦 Produtos")
-    st.info("Aqui entra o cadastro de produtos (já feito na Parte 2).")
-
-# Função para tela de vendas
-def tela_vendas():
-    st.header("💰 Vendas")
-    if st.session_state.get("usuario") == "visitante":
-        st.warning("Visitante não pode registrar vendas.")
-        return
-
-    st.info("Aqui entra a tela de vendas (já feita na Parte 2).")
-
-# Função para tela de relatórios
-def tela_relatorios():
-    st.header("📊 Relatórios")
-
-    if st.session_state.get("usuario") == "visitante":
-        st.warning("Visitante não pode ver os valores de vendas e comissão.")
-        if "clientes" in st.session_state:
-            for cliente, vendas in st.session_state["clientes"].items():
-                st.write(f"Cliente: {cliente}")
-                for v in vendas:
-                    st.write(f"- {v['nome']} x {v['quantidade']} (??? cada)")
-        return
-
-    st.info("Aqui entra a tela de relatórios (já feita na Parte 2).")
-
 # Menu no topo
 def menu_topo():
     st.markdown("## 🛒 Sistema de Vendas")
 
     escolha = st.radio(
         "Navegação:",
-        ["Clientes 👫", "Produtos 📦", "Vendas 💰", "Relatórios 📊", "Sair 🚪"],
+        ["Resumo 📊", "Clientes 👫", "Produtos 📦", "Vendas 💰", "Relatórios 📊", "Sair 🚪"],
         horizontal=True
     )
 
-    if escolha == "Clientes 👫":
+    if escolha == "Resumo 📊":
+        tela_resumo()  # já está implementada na Parte 2
+    elif escolha == "Clientes 👫":
         tela_clientes()
     elif escolha == "Produtos 📦":
-        tela_produtos()
+        tela_produtos()  # já está implementada na Parte 2
     elif escolha == "Vendas 💰":
-        tela_vendas()
+        tela_vendas()  # já está implementada na Parte 2
     elif escolha == "Relatórios 📊":
-        tela_relatorios()
+        tela_relatorios()  # já está implementada na Parte 2
     elif escolha == "Sair 🚪":
         st.session_state.clear()
         st.session_state["usuario"] = None
@@ -299,7 +267,7 @@ def menu_topo():
 # Função principal
 def main():
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
-        st.warning("⚠️ Você precisa fazer login para acessar o sistema.")
+        login()  # chama a tela de login da Parte 2
     else:
         menu_topo()
 
