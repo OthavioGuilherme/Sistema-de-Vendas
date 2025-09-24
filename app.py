@@ -264,7 +264,7 @@ def tela_clientes():
         else:
             cols[2].button("Apagar", key=f"disabled_apagar_{cliente}", disabled=True)
 
-# ================== Vendas ==================
+# ================== Vendas (COM CARRINHO) ==================
 def tela_vendas():
     st.header("💰 Vendas")
     visitante = is_visitante()
@@ -280,9 +280,11 @@ def tela_vendas():
                if st.session_state.get("venda_cliente_selecionado") in clientes else 0)
     )
 
-    vendas = st.session_state["clientes"].get(cliente_sel, [])
+    # Inicializa o carrinho temporário para esta sessão
+    if "carrinho" not in st.session_state:
+        st.session_state["carrinho"] = []
 
-    st.markdown("### ➕ Adicionar Venda")
+    st.markdown("### ➕ Adicionar ao Carrinho")
     if not visitante:
         produto_input = st.text_input("Buscar produto por código ou nome", key="venda_busca_produto")
         opcoes_produtos = [
@@ -293,29 +295,54 @@ def tela_vendas():
             produto_selecionado = st.selectbox("Produto", [""] + opcoes_produtos, key="venda_select_produto")
         else:
             produto_selecionado = None
+            
         quantidade = st.number_input("Quantidade", min_value=1, step=1, key="venda_qtd")
-        if st.button("Adicionar venda", key="btn_adicionar_venda"):
+        
+        # Botão para adicionar ao carrinho
+        if st.button("Adicionar ao carrinho", key="btn_adicionar_carrinho"):
             if produto_selecionado and produto_selecionado != "":
                 cod = int(produto_selecionado.split(" - ")[0])
                 p = st.session_state["produtos"][cod]
                 if quantidade > p.get("quantidade", 0):
-                    st.warning(f"Estoque insuficiente! Disponível: {p.get('quantidade',0)}")
+                    st.warning(f"Estoque insuficiente! Disponível: {p.get('quantidade', 0)}")
                 else:
-                    vendas.append({"cod": cod, "nome": p["nome"], "preco": p["preco"], "quantidade": quantidade})
-                    p["quantidade"] -= quantidade  # atualiza estoque
-                    st.session_state["clientes"][cliente_sel] = vendas
-                    save_db()
-                    st.success(f"Venda adicionada ao cliente {cliente_sel}!")
-                    st.rerun()
+                    # Adiciona ao carrinho temporário
+                    st.session_state["carrinho"].append({"cod": cod, "nome": p["nome"], "preco": p["preco"], "quantidade": quantidade})
+                    st.session_state["produtos"][cod]["quantidade"] -= quantidade  # atualiza estoque
+                    st.success(f"Item '{p['nome']}' adicionado ao carrinho!")
             else:
                 st.warning("Escolha um produto válido.")
     else:
         st.info("🔒 Visitantes não podem adicionar vendas.")
 
-    st.markdown("### 📝 Vendas do Cliente")
-    if not vendas:
+    st.markdown("### 🛒 Carrinho Atual")
+    if st.session_state["carrinho"]:
+        total_carrinho = 0
+        for item in st.session_state["carrinho"]:
+            valor_item = item["preco"] * item["quantidade"]
+            st.write(f"- {item['nome']} x {item['quantidade']} (R$ {valor_item:.2f})")
+            total_carrinho += valor_item
+        st.info(f"Total do Carrinho: R$ {total_carrinho:.2f}")
+
+        if st.button("✅ Salvar Carrinho", key="btn_salvar_carrinho"):
+            vendas = st.session_state["clientes"].get(cliente_sel, [])
+            vendas.extend(st.session_state["carrinho"])
+            st.session_state["clientes"][cliente_sel] = vendas
+            st.session_state["carrinho"] = []  # Limpa o carrinho
+            save_db()
+            st.success(f"Carrinho salvo para o cliente {cliente_sel}!")
+            st.rerun()
+
+    else:
+        st.info("O carrinho está vazio.")
+
+    st.markdown("---")
+    st.markdown(f"### 📝 Vendas Registradas para {cliente_sel}")
+    vendas_registradas = st.session_state["clientes"].get(cliente_sel, [])
+    if not vendas_registradas:
         st.info("Nenhuma venda registrada para este cliente.")
-    for idx, v in enumerate(vendas):
+    
+    for idx, v in enumerate(vendas_registradas):
         col1, col2, col3 = st.columns([5,1.5,1.5])
         cod = v.get("cod")
         nome = v.get("nome", "???")
@@ -329,8 +356,8 @@ def tela_vendas():
             col3.number_input("Qtde", min_value=1, value=quantidade, key=f"editar_disabled_{cliente_sel}_{idx}", disabled=True)
         else:
             if col2.button("Apagar", key=f"apagar_{cliente_sel}_{idx}"):
-                vendas.pop(idx)
-                st.session_state["clientes"][cliente_sel] = vendas
+                vendas_registradas.pop(idx)
+                st.session_state["clientes"][cliente_sel] = vendas_registradas
                 st.session_state["produtos"][cod]["quantidade"] += quantidade  # devolve ao estoque
                 save_db()
                 st.success("Venda apagada")
@@ -341,9 +368,9 @@ def tela_vendas():
                 if diff > st.session_state["produtos"][cod]["quantidade"]:
                     st.warning(f"Estoque insuficiente! Disponível: {st.session_state['produtos'][cod]['quantidade']}")
                 else:
-                    vendas[idx]["quantidade"] = nova_qtd
+                    vendas_registradas[idx]["quantidade"] = nova_qtd
                     st.session_state["produtos"][cod]["quantidade"] -= diff
-                    st.session_state["clientes"][cliente_sel] = vendas
+                    st.session_state["clientes"][cliente_sel] = vendas_registradas
                     save_db()
                     st.success("Venda atualizada")
                     st.rerun()
