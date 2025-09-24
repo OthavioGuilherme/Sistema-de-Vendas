@@ -1,54 +1,81 @@
 # ================== PARTE 1 ==================
 import streamlit as st
-import pdfplumber
-import re
-import io
-import os
-import json
 from datetime import datetime
+import json
+import os
+import io
+import re
 
-# ---------------- CONFIGURAÇÕES ----------------
-DB_FILE = "db.json"
+# PDF opcional
+try:
+    import pdfplumber
+except Exception:
+    pdfplumber = None
+
+st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
+
+# ================== Usuários (login) ==================
+USERS = {"othavio": "122008", "isabela": "122008"}  # usuários e senhas simples
 LOG_FILE = "acessos.log"
+DB_FILE = "db.json"
 
-# Usuários fixos do sistema
-USERS = {
-    "admin": "1234",
-    "otavio": "senha",
-    "isabela": "senha"
-}
+# ================== Registro de acesso ==================
+def registrar_acesso(usuario: str):
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} - {usuario}\n")
+    except:
+        pass
 
-# ---------------- BANCO DE DADOS ----------------
-def load_db():
-    if not os.path.exists(DB_FILE):
-        return {"produtos": {}, "clientes": {}}
-    with open(DB_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-
+# ================== Helpers: salvar/carregar DB ==================
 def save_db():
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(
-            {"produtos": st.session_state["produtos"], "clientes": st.session_state["clientes"]},
-            f,
-            ensure_ascii=False,
-            indent=2
-        )
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "produtos": st.session_state.get("produtos", {}),
+                "clientes": st.session_state.get("clientes", {}),
+            }, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.warning(f"Falha ao salvar DB: {e}")
 
-# ---------------- LOG DE ACESSOS ----------------
-def registrar_acesso(msg):
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+def load_db():
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            prods = {}
+            for k, v in data.get("produtos", {}).items():
+                try:
+                    prods[int(k)] = v
+                except:
+                    prods[k] = v
+            clis = {k: v for k, v in data.get("clientes", {}).items()}
+            return prods, clis
+        except Exception:
+            pass
+    default_clients = {
+        "Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []
+    }
+    return {}, default_clients
 
-# ---------------- VISITANTE? ----------------
+# ================== Session State inicial ==================
+if "usuario" not in st.session_state:
+    st.session_state["usuario"] = None
+if "produtos" not in st.session_state or not st.session_state["produtos"]:
+    prods_loaded, clients_loaded = load_db()
+    st.session_state["produtos"] = prods_loaded or {}
+    st.session_state["clientes"] = clients_loaded or {
+        "Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []
+    }
+if "menu" not in st.session_state:
+    st.session_state["menu"] = "Resumo 📊"
+if "recarregar" not in st.session_state:
+    st.session_state["recarregar"] = False
+
+# ================== Função: is_visitante ==================
 def is_visitante():
-    usuario = st.session_state.get("usuario", "")
-    return usuario.startswith("visitante")
-
-# ---------------- INICIAR ESTADO ----------------
-if "produtos" not in st.session_state or "clientes" not in st.session_state:
-    db = load_db()
-    st.session_state["produtos"] = db.get("produtos", {})
-    st.session_state["clientes"] = db.get("clientes", {})
+    u = st.session_state.get("usuario")
+    return isinstance(u, str) and u.startswith("visitante-")
 # ================== PARTE 2 ==================
 # ================== Login ==================
 def login():
