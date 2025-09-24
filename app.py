@@ -8,9 +8,9 @@ import re
 
 # PDF opcional
 try:
-    import pdfplumber
+    import pdfplumber
 except Exception:
-    pdfplumber = None
+    pdfplumber = None
 
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
