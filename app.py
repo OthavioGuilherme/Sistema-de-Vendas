@@ -120,25 +120,15 @@ def tela_resumo():
         st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
         st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
 
-# ================== PDF (opcional) ==================
-def tela_pdf():
-    st.header("📄 Importar Estoque via Nota Fiscal (PDF)")
-    if is_visitante():
-        st.info("🔒 Apenas usuários logados podem importar PDF.")
-        return
-    if pdfplumber is None:
-        st.warning("A biblioteca pdfplumber não está disponível no ambiente.")
-        return
-    pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
-    if pdf_file is not None:
-        if st.button("Substituir estoque pelo PDF"):
-            substituir_estoque_pdf(pdf_file)
-
+# ================== PDF (Importar Estoque) ==================
 def substituir_estoque_pdf(uploaded_file):
     data = uploaded_file.read()
     stream = io.BytesIO(data)
     novos_produtos = {}
-    linha_regex = re.compile(r'^\s*(\d+)\s+(.+?)\s+([\d.,]+)\s*$')
+
+    # Regex adaptado ao layout da sua nota: quantidade, código (5 dígitos), nome e preço
+    linha_regex = re.compile(r'^\s*(\d+)\s+(\d{5})\s+(.+?)\s+([\d.,]+)\s*$')
+
     try:
         with pdfplumber.open(stream) as pdf:
             for page in pdf.pages:
@@ -148,7 +138,11 @@ def substituir_estoque_pdf(uploaded_file):
                 for linha in text.splitlines():
                     m = linha_regex.match(linha.strip())
                     if m:
-                        cod_s, nome, preco_s = m.groups()
+                        qtd_s, cod_s, nome, preco_s = m.groups()
+                        try:
+                            qtd = int(qtd_s)
+                        except:
+                            qtd = 0
                         try:
                             cod = int(cod_s)
                         except:
@@ -158,7 +152,11 @@ def substituir_estoque_pdf(uploaded_file):
                         except:
                             preco = 0.0
                         if cod is not None:
-                            novos_produtos[cod] = {"nome": nome.title(), "preco": preco, "quantidade": 10}  # estoque inicial
+                            novos_produtos[cod] = {
+                                "nome": nome.title(),
+                                "preco": preco,
+                                "quantidade": qtd
+                            }
     except Exception as e:
         st.error(f"Erro ao ler PDF: {e}")
         return
@@ -168,19 +166,23 @@ def substituir_estoque_pdf(uploaded_file):
         return
     st.session_state["produtos"] = novos_produtos
     save_db()
-    st.success("Estoque atualizado a partir do PDF!")
+    st.success("✅ Estoque atualizado a partir do PDF!")
 
 # ================== Produtos ==================
 def adicionar_produto_manual(cod, nome, preco, qtd=10):
     cod = int(cod)
-    st.session_state["produtos"][cod] = {"nome": nome.strip(), "preco": float(preco), "quantidade": qtd}
+    st.session_state["produtos"][cod] = {
+        "nome": nome.strip(),
+        "preco": float(preco),
+        "quantidade": qtd
+    }
     save_db()
     st.success(f"Produto {nome} adicionado/atualizado!")
 
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
-    acao = st.radio("Ação", ["Listar/Buscar", "Adicionar"], horizontal=True)
+    acao = st.radio("Ação", ["Listar/Buscar", "Adicionar", "Importar PDF"], horizontal=True)
 
     if acao == "Adicionar":
         if visitante:
@@ -197,12 +199,22 @@ def tela_produtos():
                 st.warning("Informe um nome válido.")
             else:
                 adicionar_produto_manual(cod, nome, preco, quantidade)
-    else:
+
+    elif acao == "Listar/Buscar":
         termo = st.text_input("Buscar por nome ou código").lower()
         st.subheader("Lista de Produtos")
         for cod, dados in sorted(st.session_state["produtos"].items(), key=lambda x: str(x[0])):
             if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f}) | Estoque: {dados.get('quantidade', 0)}")
+
+    elif acao == "Importar PDF":
+        if visitante:
+            st.info("🔒 Visitantes não podem importar PDF.")
+            return
+        pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
+        if pdf_file is not None:
+            if st.button("Substituir estoque pelo PDF"):
+                substituir_estoque_pdf(pdf_file)
 # ================== PARTE 3 ==================
 # ================== Clientes ==================
 def tela_clientes():
