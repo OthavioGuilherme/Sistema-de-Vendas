@@ -1,4 +1,4 @@
-# app.py (COMPLETO E ATUALIZADO PARA GOOGLE SHEETS)
+# app.py (COMPLETO E ATUALIZADO PARA GOOGLE SHEETS E CORREÇÃO DE TIMEOUT)
 # ================= PARTE 1 - CONEXÃO COM GOOGLE SHEETS ==============
 import streamlit as st
 import pandas as pd
@@ -29,7 +29,8 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 @st.cache_data(ttl=600) # Mantém os dados em cache por 10 minutos
 def load_data(sheet_name: str) -> pd.DataFrame:
     try:
-        df = conn.read(worksheet=sheet_name)
+        # A CORREÇÃO É AQUI: Adicionamos ttl=0 para forçar a leitura após o cache expirar e evitar timeout
+        df = conn.read(worksheet=sheet_name, ttl=0) 
         df = df.dropna(how='all')
         
         # Garante que o ID e cod são numéricos para joins e buscas
@@ -54,7 +55,8 @@ def get_worksheet(sheet_name: str):
     try:
         # Acessa a interface do gspread autenticado
         gc = conn.client
-        sheet = gc.open_by_url(st.secrets.gsheets.spreadsheet_url)
+        # Usa o URL do secrets.toml (st.secrets.gsheets.spreadsheet_url)
+        sheet = gc.open_by_url(st.secrets.gsheets.spreadsheet_url) 
         return sheet.worksheet(sheet_name)
     except Exception as e:
         st.error(f"Erro ao conectar com a planilha para escrita: {e}. Verifique as permissões.")
@@ -130,7 +132,8 @@ def substituir_estoque_pdf(uploaded_file):
     data = uploaded_file.read()
     stream = io.BytesIO(data)
     novos_produtos = []
-    linha_regex = re.compile(r'^\s*(\d+)\s+(\d{5})\s+(.+?)\s+([\d.,]+)\s*$')
+    # Expressão para extrair: QTD (dígitos), COD (5 dígitos), NOME (qualquer coisa), PREÇO (dígitos com ponto/vírgula)
+    linha_regex = re.compile(r'^\s*(\d+)\s+(\d{5})\s+(.+?)\s+([\d.,]+)\s*$') 
 
     try:
         with pdfplumber.open(stream) as pdf:
@@ -143,6 +146,7 @@ def substituir_estoque_pdf(uploaded_file):
                         qtd_s, cod_s, nome, preco_s = m.groups()
                         cod = int(cod_s) if cod_s else None
                         qtd = int(qtd_s) if qtd_s else 0
+                        # Converte o preço para o formato correto (R$ 1.000,00 -> 1000.00)
                         preco = float(preco_s.replace('.', '').replace(',', '.')) if preco_s else 0.0
                         if cod is not None:
                              novos_produtos.append([cod, nome.title(), preco, qtd])
@@ -156,8 +160,10 @@ def substituir_estoque_pdf(uploaded_file):
 
     ws = get_worksheet('produtos')
     if ws:
+        # Apaga tudo e reescreve o cabeçalho
         ws.clear()
         ws.append_row(['cod', 'nome', 'preco', 'quantidade'])
+        # Adiciona os novos produtos
         ws.append_rows(novos_produtos)
         load_data.clear() 
         st.success("✅ Estoque atualizado a partir do PDF!")
@@ -219,7 +225,12 @@ def tela_produtos():
         pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
         if pdf_file is not None:
             if st.button("Substituir estoque pelo PDF"):
-                substituir_estoque_pdf(pdf_file)
+                # Verifica se a biblioteca foi instalada corretamente
+                if pdfplumber:
+                    substituir_estoque_pdf(pdf_file)
+                else:
+                    st.error("A biblioteca 'pdfplumber' não pôde ser carregada. Verifique as dependências.")
+
 
 # ================== Funções de Clientes (CRUD) ==================
 def adicionar_cliente(nome):
@@ -346,7 +357,9 @@ def tela_vendas():
         return
 
     produto_escolhido_str = st.selectbox("Produto", list(produto_opcoes.keys()))
-    qtd = st.number_input("Quantidade", min_value=1, step=1)
+    # Pre-seleciona a quantidade máxima disponível, mas permite ajuste
+    estoque_disponivel = int(pd.to_numeric(df_produtos[df_produtos['cod'] == str(produto_opcoes[produto_escolhido_str])]['quantidade'].iloc[0], errors='coerce'))
+    qtd = st.number_input("Quantidade", min_value=1, max_value=estoque_disponivel, step=1)
     
     if st.button("Registrar Venda"):
         produto_cod = int(produto_opcoes[produto_escolhido_str])
@@ -374,13 +387,16 @@ def tela_relatorios():
     df_relatorio = df_relatorio.sort_values(by='data', ascending=False)
     
     for row in df_relatorio.itertuples(index=False):
-        data = row.data
+        # Garante que a data é tratada como string e evita erros de formatação
+        data_str = str(row.data)
+        data = data_str[:16] if len(data_str) >= 16 else data_str
+        
         cliente = row.cliente_nome
         produto = row.produto_nome
         qtd = int(pd.to_numeric(row.quantidade, errors='coerce') or 0)
         total = row.total or 0.0
         
-        st.write(f"🧾 {data[:16]} | Cliente: {cliente} | Produto: {produto} | "
+        st.write(f"🧾 {data} | Cliente: {cliente} | Produto: {produto} | "
                  f"Qtd: {qtd} | Valor: R$ {total:.2f}")
 
 # ================== Navegação e Main ==================
