@@ -1,5 +1,6 @@
-pdfplumber
 streamlit
-pillow
+pandas
+gspread
+streamlit-gsheets
 pdfplumber
-
+pillow
