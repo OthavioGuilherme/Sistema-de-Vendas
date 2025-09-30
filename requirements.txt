@@ -2,5 +2,5 @@ streamlit
 pandas
 gspread
 streamlit-gsheets
-pdfplumber
 pillow
+pdfplumber
