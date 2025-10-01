@@ -1,3 +1,0 @@
-[runner]
-# Forçar uma versão estável do Python
-python_version = "3.12" 
