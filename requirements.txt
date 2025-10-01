@@ -1,4 +1,3 @@
-# requirements.txt (VERSÃO LIMPA)
 streamlit==1.36.0
 pandas==2.2.2
 gspread==5.12.3
