@@ -1,4 +1,5 @@
+# packages.txt (VERSÃO OTIMIZADA)
 build-essential
 pkg-config
 python3-dev
-poppler-utils 
+libpoppler-cpp-dev  # Garante que as dependências do Poppler estão prontas para o Python
