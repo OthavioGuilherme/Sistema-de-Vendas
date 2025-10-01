@@ -1,6 +1,6 @@
 streamlit==1.36.0
 pandas==2.2.2
 gspread==5.12.3
-st-gsheets-connection  # <<-- REMOVA O '==1.1.0'
+st-gsheets-connection
 pillow
 pdfplumber
