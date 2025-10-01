@@ -90,7 +90,7 @@ def login():
                     registrar_acesso(f"login-usuario:{usuario}")
                     st.success(f"Bem-vindo(a), {usuario}!")
                     # CORREÇÃO: Usando experimental_rerun para maior estabilidade
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
     else:
@@ -102,7 +102,7 @@ def login():
                     registrar_acesso(f"login-visitante:{nome.strip()}")
                     st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
                     # CORREÇÃO: Usando experimental_rerun para maior estabilidade
-                    st.experimental_rerun()
+                    st.rerun()
 
 # ================== Tela de Resumo ==================
 def tela_resumo():
@@ -427,7 +427,7 @@ def menu_principal():
         st.session_state["usuario"] = None
         st.success("Você saiu do sistema.")
         # CORREÇÃO: Usando experimental_rerun para maior estabilidade
-        st.experimental_rerun()
+        st.rerun()
 
 def main():
     if not st.session_state["usuario"]:
