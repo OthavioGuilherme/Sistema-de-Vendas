@@ -1,28 +1,15 @@
-# app.py (TESTE DE IMPORTAÇÃO CRÍTICO)
+# app.py (TESTE MAIS BÁSICO POSSÍVEL)
 import streamlit as st
-import sys
 
-# Tenta importar a biblioteca de conexão do Google Sheets, que é o provável ponto de falha.
+st.title("✅ SUCESSO! Streamlit rodando!")
+st.info("Se você está vendo esta mensagem, o problema NÃO é o Streamlit, mas sim as suas importações (Google Sheets ou PDF).")
+
+# Deixe as importações problemáticas no final, APÓS o texto de sucesso.
 try:
     from st_gsheets_connection import GSheetsConnection
-    st.success("✅ st-gsheets-connection foi importada com sucesso!")
-except ImportError:
-    st.error("❌ ERRO CRÍTICO: st-gsheets-connection NÃO foi encontrada. Verifique seu requirements.txt!")
-    GSheetsConnection = None
+    import pdfplumber
+    st.success("As importações de GSheets e PDF funcionaram.")
+except ImportError as e:
+    st.error(f"❌ Erro de importação! Verifique requirements.txt. Detalhe: {e}")
 except Exception as e:
-    st.exception(f"❌ Erro desconhecido na importação: {e}")
-    GSheetsConnection = None
-
-# O resto das importações pode ter falhado, mas vamos ver o que o Streamlit exibe.
-try:
-    import pandas as pd
-    st.success("✅ Pandas importado com sucesso!")
-except:
-    st.error("❌ Pandas não importado.")
-
-
-st.title("Sistema de Vendas - Teste de Funcionamento 🛠️")
-st.write("Se você está vendo esta tela, seu Streamlit está funcionando!")
-st.write(f"Status da Conexão: {'Pronto' if GSheetsConnection else 'FALHOU ou Desativada'}")
-
-st.info("Se o app travar novamente antes de exibir este texto, o problema é muito mais fundamental no ambiente de deploy.")
+    st.error(f"❌ Erro na importação: {e}")
