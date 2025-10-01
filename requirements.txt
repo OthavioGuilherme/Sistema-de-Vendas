@@ -4,6 +4,3 @@ gspread==5.12.3
 st-gsheets-connection
 pillow
 pdfplumber
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
