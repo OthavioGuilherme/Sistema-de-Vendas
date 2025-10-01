@@ -1,11 +1,12 @@
-# app.py (COMPLETO E UNIFICADO COM CORREÇÕES DE LOOP E CACHE)
+# app.py (MODO DE TESTE: GOOGLE SHEETS DESABILITADO)
 # ================= PARTE 1 - IMPORTAÇÕES E CONFIGURAÇÃO ==================
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
 import re
-from st_gsheets_connection import GSheetsConnection
+# Importa GSheetsConnection, mas não vamos usá-la.
+from st_gsheets_connection import GSheetsConnection 
 
 # Importa pdfplumber de forma segura
 try:
@@ -16,51 +17,61 @@ except ImportError:
 
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# ================== Variáveis Globais e Conexão ==================
+# ================== Variáveis Globais e Conexão (TESTE) ==================
 USERS = {"othavio": "122008", "isabela": "122008"}
-LOG_FILE = "acessos.log" # Apenas para registro local, se necessário
+LOG_FILE = "acessos.log" 
 
-# O nome "gsheets" deve bater com o [gsheets] no secrets.toml
-# Se o app travar aqui com o erro 1ST, é problema de secrets.toml/permissão
-conn = st.connection("gsheets", type=GSheetsConnection) 
+# MUDANÇA CRÍTICA PARA TESTE: Não tenta conectar. Se o app carregar, o problema é nas credenciais.
+conn = None 
 
-# ================== Funções de Leitura (READ - Usando Caching) ==================
+# ================== Funções de Leitura (READ - MODO TESTE) ==================
 # Função genérica para ler uma aba (sheet)
-@st.cache_data(ttl=600) # Mantém os dados em cache por 10 minutos
+@st.cache_data(ttl=600) 
 def load_data(sheet_name: str) -> pd.DataFrame:
-    try:
-        # CORREÇÃO CRÍTICA: Removido o ttl=0. O @st.cache_data(ttl=600) é quem controla o tempo.
-        df = conn.read(worksheet=sheet_name) 
-        df = df.dropna(how='all')
-        
-        # Garante que o ID e cod são numéricos para joins e buscas
-        if 'id' in df.columns:
-            df['id'] = pd.to_numeric(df['id'], errors='coerce').fillna(0).astype(int)
-        if sheet_name == 'produtos':
-             if 'cod' in df.columns:
-                df['cod'] = pd.to_numeric(df['cod'], errors='coerce').fillna(0).astype(int)
-        if sheet_name == 'vendas':
-            if 'cliente_id' in df.columns:
-                df['cliente_id'] = pd.to_numeric(df['cliente_id'], errors='coerce').fillna(0).astype(int)
-            if 'produto_cod' in df.columns:
-                df['produto_cod'] = pd.to_numeric(df['produto_cod'], errors='coerce').fillna(0).astype(int)
+    # MUDANÇA CRÍTICA PARA TESTE: Retorna dados dummy para forçar a renderização
+    st.info(f"MODO DE TESTE: Carregando dados fictícios para a aba '{sheet_name}'.")
 
-        return df
-    except Exception as e:
-        st.error(f"Erro ao carregar dados da aba '{sheet_name}'. Verifique o nome da aba e a configuração de segredos. Erro: {e}")
+    if sheet_name == 'clientes':
+        return pd.DataFrame({'id': [1, 2], 'nome': ['Cliente Teste A', 'Cliente Teste B']})
+    elif sheet_name == 'produtos':
+        return pd.DataFrame({
+            'cod': [10001, 10002], 
+            'nome': ['Produto A', 'Produto B'],
+            'preco': [50.00, 25.00],
+            'quantidade': [10, 5]
+        })
+    elif sheet_name == 'vendas':
+        return pd.DataFrame({
+            'id': [1], 
+            'cliente_id': [1], 
+            'produto_cod': [10001],
+            'quantidade': [1], 
+            'data': [datetime.now().isoformat()]
+        })
+    else:
         return pd.DataFrame()
 
-# ================== Funções de Escrita (WRITE) ==================
+# ================== Funções de Escrita (WRITE - MODO TESTE) ==================
 def get_worksheet(sheet_name: str):
-    try:
-        # Acessa a interface do gspread autenticado
-        gc = conn.client
-        # Usa o URL do secrets.toml (st.secrets.gsheets.spreadsheet_url)
-        sheet = gc.open_by_url(st.secrets.gsheets.spreadsheet_url) 
-        return sheet.worksheet(sheet_name)
-    except Exception as e:
-        st.error(f"Erro ao conectar com a planilha para escrita: {e}. Verifique as permissões.")
-        return None
+    # MODO TESTE: Não retorna nada que permita escrita
+    st.warning("MODO DE TESTE: Operações de escrita desabilitadas.")
+    return None
+
+# Funções de Escrita Adaptadas para o Teste
+def substituir_estoque_pdf(uploaded_file):
+    st.warning("MODO DE TESTE: A substituição de estoque está desabilitada.")
+    
+def adicionar_produto_manual(cod, nome, preco, qtd=10):
+    st.warning(f"MODO DE TESTE: O produto '{nome}' não foi salvo.")
+
+def adicionar_cliente(nome):
+    st.warning(f"MODO DE TESTE: O cliente '{nome}' não foi salvo.")
+
+def registrar_venda(cliente_nome, produto_cod, quantidade):
+    st.warning(f"MODO DE TESTE: A venda de {quantidade} unidades de {produto_cod} não foi registrada.")
+
+
+# ================== Funções de Interface (SEM MUDANÇAS) ==================
 
 # ================== Registro de acesso e Session State ==================
 def registrar_acesso(usuario: str):
@@ -89,8 +100,7 @@ def login():
                     st.session_state["usuario"] = usuario
                     registrar_acesso(f"login-usuario:{usuario}")
                     st.success(f"Bem-vindo(a), {usuario}!")
-                    # CORREÇÃO: Usando experimental_rerun para maior estabilidade
-                    st.rerun()
+                    st.experimental_rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
     else:
@@ -101,12 +111,11 @@ def login():
                     st.session_state["usuario"] = f"visitante-{nome.strip()}"
                     registrar_acesso(f"login-visitante:{nome.strip()}")
                     st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
-                    # CORREÇÃO: Usando experimental_rerun para maior estabilidade
-                    st.rerun()
+                    st.experimental_rerun()
 
 # ================== Tela de Resumo ==================
 def tela_resumo():
-    st.header("📊 Resumo de Vendas")
+    st.header("📊 Resumo de Vendas (Modo Teste)")
     visitante = is_visitante()
     
     df_vendas = load_data('vendas')
@@ -115,6 +124,7 @@ def tela_resumo():
     if df_vendas.empty or df_produtos.empty:
         total_geral = 0.0
     else:
+        # Usamos o merge e cálculo, mesmo em modo de teste, para testar a lógica do app.py
         df_merged = pd.merge(df_vendas, df_produtos[['cod', 'preco']], 
                              left_on='produto_cod', right_on='cod', how='left')
         
@@ -130,70 +140,8 @@ def tela_resumo():
         st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
 
 # ================== Funções de Produtos (CRUD) ==================
-def substituir_estoque_pdf(uploaded_file):
-    if not pdfplumber:
-        st.error("O processamento de PDF não está disponível. Verifique as dependências.")
-        return
-
-    data = uploaded_file.read()
-    stream = io.BytesIO(data)
-    novos_produtos = []
-    # Expressão para extrair: QTD (dígitos), COD (5 dígitos), NOME (qualquer coisa), PREÇO (dígitos com ponto/vírgula)
-    linha_regex = re.compile(r'^\s*(\d+)\s+(\d{5})\s+(.+?)\s+([\d.,]+)\s*$') 
-
-    try:
-        with pdfplumber.open(stream) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if not text: continue
-                for linha in text.splitlines():
-                    m = linha_regex.match(linha.strip())
-                    if m:
-                        qtd_s, cod_s, nome, preco_s = m.groups()
-                        cod = int(cod_s) if cod_s else None
-                        qtd = int(qtd_s) if qtd_s else 0
-                        # Converte o preço para o formato correto (R$ 1.000,00 -> 1000.00)
-                        preco = float(preco_s.replace('.', '').replace(',', '.')) if preco_s else 0.0
-                        if cod is not None:
-                             novos_produtos.append([cod, nome.title(), preco, qtd])
-    except Exception as e:
-        st.error(f"Erro ao ler PDF: {e}")
-        return
-
-    if not novos_produtos:
-        st.error("Nenhum produto válido encontrado no PDF.")
-        return
-
-    ws = get_worksheet('produtos')
-    if ws:
-        # Apaga tudo e reescreve o cabeçalho
-        ws.clear()
-        ws.append_row(['cod', 'nome', 'preco', 'quantidade'])
-        # Adiciona os novos produtos
-        ws.append_rows(novos_produtos)
-        load_data.clear() 
-        st.success("✅ Estoque atualizado a partir do PDF!")
-
-def adicionar_produto_manual(cod, nome, preco, qtd=10):
-    ws = get_worksheet('produtos')
-    if ws:
-        df_produtos = load_data('produtos')
-        
-        # Verifica se o produto existe
-        if cod in df_produtos['cod'].values:
-            idx = df_produtos[df_produtos['cod'] == cod].index[0]
-            # Sheets é 1-based, e a linha 1 é o cabeçalho, então índice é +2
-            ws.update_cell(idx + 2, 2, nome.strip())
-            ws.update_cell(idx + 2, 3, float(preco))
-            ws.update_cell(idx + 2, 4, int(qtd))
-        else:
-            ws.append_row([int(cod), nome.strip(), float(preco), int(qtd)])
-            
-        load_data.clear() 
-        st.success(f"Produto {nome} adicionado/atualizado!")
-
 def tela_produtos():
-    st.header("📦 Produtos")
+    st.header("📦 Produtos (Modo Teste)")
     visitante = is_visitante()
     acao = st.radio("Ação", ["Listar/Buscar", "Adicionar", "Importar PDF"], horizontal=True)
 
@@ -213,7 +161,7 @@ def tela_produtos():
 
     elif acao == "Listar/Buscar":
         termo = st.text_input("Buscar por nome ou código").lower()
-        st.subheader("Lista de Produtos")
+        st.subheader("Lista de Produtos Fictícios")
 
         df_produtos = load_data('produtos')
 
@@ -231,31 +179,15 @@ def tela_produtos():
         pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
         if pdf_file is not None:
             if st.button("Substituir estoque pelo PDF"):
-                # Verifica se a biblioteca foi instalada corretamente
                 if pdfplumber:
                     substituir_estoque_pdf(pdf_file)
                 else:
-                    st.error("A biblioteca 'pdfplumber' não pôde ser carregada. Verifique as dependências (packages.txt e requirements.txt).")
+                    st.error("A biblioteca 'pdfplumber' não pôde ser carregada.")
 
 
 # ================== Funções de Clientes (CRUD) ==================
-def adicionar_cliente(nome):
-    ws = get_worksheet('clientes')
-    df_clientes = load_data('clientes')
-    
-    if ws:
-        if nome.strip() in df_clientes['nome'].values:
-             st.info(f"Cliente {nome} já existe.")
-             return
-             
-        novo_id = df_clientes['id'].max() + 1 if not df_clientes.empty and 'id' in df_clientes.columns else 1
-        
-        ws.append_row([novo_id, nome.strip()])
-        load_data.clear()
-        st.success(f"Cliente {nome} adicionado!")
-
 def tela_clientes():
-    st.header("👥 Clientes")
+    st.header("👥 Clientes (Modo Teste)")
     visitante = is_visitante()
     acao = st.radio("Ação", ["Listar", "Adicionar"], horizontal=True)
 
@@ -274,67 +206,13 @@ def tela_clientes():
         df_clientes = load_data('clientes')
         df_clientes = df_clientes.sort_values(by='nome')
         
-        st.subheader("Lista de Clientes")
+        st.subheader("Lista de Clientes Fictícios")
         for row in df_clientes.itertuples(index=False):
             st.write(f"{row.id} - {row.nome}")
 
 # ================== Funções de Vendas (CRUD) ==================
-def registrar_venda(cliente_nome, produto_cod, quantidade):
-    ws_vendas = get_worksheet('vendas')
-    ws_produtos = get_worksheet('produtos')
-    
-    if not ws_vendas or not ws_produtos:
-        st.error("Erro de conexão com uma das abas (vendas/produtos).")
-        return
-
-    df_clientes = load_data('clientes')
-    if cliente_nome not in df_clientes['nome'].values:
-        st.error("Cliente não encontrado.")
-        return
-        
-    cliente_id = df_clientes[df_clientes['nome'] == cliente_nome]['id'].iloc[0]
-
-    df_produtos = load_data('produtos')
-    produto_cod = pd.to_numeric(produto_cod, errors='coerce')
-    quantidade = int(quantidade)
-    
-    produto_row = df_produtos[df_produtos['cod'] == produto_cod]
-
-    if produto_row.empty:
-        st.error("Produto não encontrado.")
-        return
-        
-    estoque_atual = pd.to_numeric(produto_row['quantidade'].iloc[0], errors='coerce') or 0
-
-    if quantidade > estoque_atual:
-        st.error(f"Quantidade maior que estoque disponível ({estoque_atual}).")
-        return
-
-    # 1. Lança venda
-    df_vendas = load_data('vendas')
-    novo_id_venda = df_vendas['id'].max() + 1 if not df_vendas.empty and 'id' in df_vendas.columns else 1
-
-    ws_vendas.append_row([
-        novo_id_venda, 
-        cliente_id, 
-        produto_cod, 
-        quantidade, 
-        datetime.now().isoformat()
-    ])
-
-    # 2. Atualiza estoque no Sheets
-    # O index do Pandas (0-based) precisa ser ajustado para a linha do Sheets (1-based + 1 linha de cabeçalho)
-    row_idx_to_update = produto_row.index[0] + 2 
-    novo_estoque = estoque_atual - quantidade
-    
-    # Coluna 4 = 'quantidade'
-    ws_produtos.update_cell(row_idx_to_update, 4, int(novo_estoque))
-
-    load_data.clear() # Limpa cache de ambas as abas após a escrita
-    st.success("✅ Venda registrada!")
-
 def tela_vendas():
-    st.header("🛒 Vendas")
+    st.header("🛒 Vendas (Modo Teste)")
     visitante = is_visitante()
     if visitante:
         st.info("🔒 Visitantes não podem registrar vendas.")
@@ -363,7 +241,6 @@ def tela_vendas():
         return
 
     produto_escolhido_str = st.selectbox("Produto", list(produto_opcoes.keys()))
-    # Pre-seleciona a quantidade máxima disponível, mas permite ajuste
     estoque_disponivel = int(pd.to_numeric(df_produtos[df_produtos['cod'] == str(produto_opcoes[produto_escolhido_str])]['quantidade'].iloc[0], errors='coerce'))
     qtd = st.number_input("Quantidade", min_value=1, max_value=estoque_disponivel, step=1)
     
@@ -373,7 +250,7 @@ def tela_vendas():
 
 # ================== Relatórios ==================
 def tela_relatorios():
-    st.header("📑 Relatórios")
+    st.header("📑 Relatórios (Modo Teste)")
 
     df_vendas = load_data('vendas')
     df_clientes = load_data('clientes')
@@ -383,7 +260,6 @@ def tela_relatorios():
         st.info("Nenhuma venda registrada ainda.")
         return
         
-    # Junções (MERGE) para montar o relatório
     df_relatorio = pd.merge(df_vendas, df_clientes[['id', 'nome']], 
                             left_on='cliente_id', right_on='id', how='left').rename(columns={'nome': 'cliente_nome'})
     df_relatorio = pd.merge(df_relatorio, df_produtos[['cod', 'nome', 'preco']], 
@@ -392,8 +268,8 @@ def tela_relatorios():
     df_relatorio['total'] = pd.to_numeric(df_relatorio['quantidade'], errors='coerce') * pd.to_numeric(df_relatorio['preco'], errors='coerce')
     df_relatorio = df_relatorio.sort_values(by='data', ascending=False)
     
+    st.subheader("Vendas Fictícias:")
     for row in df_relatorio.itertuples(index=False):
-        # Garante que a data é tratada como string e evita erros de formatação
         data_str = str(row.data)
         data = data_str[:16] if len(data_str) >= 16 else data_str
         
@@ -426,8 +302,7 @@ def menu_principal():
     elif escolha == "Sair 🚪":
         st.session_state["usuario"] = None
         st.success("Você saiu do sistema.")
-        # CORREÇÃO: Usando experimental_rerun para maior estabilidade
-        st.rerun()
+        st.experimental_rerun()
 
 def main():
     if not st.session_state["usuario"]:
