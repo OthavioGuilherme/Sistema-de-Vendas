@@ -1,3 +1,3 @@
 [runner]
-# Força uma versão estável do Python, contornando o erro de instalação
-python_version = "3.12"
+# Forçar uma versão estável do Python
+python_version = "3.10" 
