@@ -1,28 +1,27 @@
-# app.py (COMPLETO E ATUALIZADO COM CORREÇÕES DE LOOP E CACHE)
-# ================= PARTE 1 - CONEXÃO COM GOOGLE SHEETS ==============
+# app.py (COMPLETO E UNIFICADO COM CORREÇÕES DE LOOP E CACHE)
+# ================= PARTE 1 - IMPORTAÇÕES E CONFIGURAÇÃO ==================
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
 import re
-import gspread 
 from st_gsheets_connection import GSheetsConnection
 
-
-# PDF opcional
+# Importa pdfplumber de forma segura
 try:
     import pdfplumber
-except Exception:
-    pdfplumber = None
+except ImportError:
+    pdfplumber = None # Garante que o código não quebre se a lib faltar
+
 
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# ================== Variáveis Globais ==================
+# ================== Variáveis Globais e Conexão ==================
 USERS = {"othavio": "122008", "isabela": "122008"}
 LOG_FILE = "acessos.log" # Apenas para registro local, se necessário
 
-# ================== Conexão Google Sheets ==================
 # O nome "gsheets" deve bater com o [gsheets] no secrets.toml
+# Se o app travar aqui com o erro 1ST, é problema de secrets.toml/permissão
 conn = st.connection("gsheets", type=GSheetsConnection) 
 
 # ================== Funções de Leitura (READ - Usando Caching) ==================
@@ -30,7 +29,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 @st.cache_data(ttl=600) # Mantém os dados em cache por 10 minutos
 def load_data(sheet_name: str) -> pd.DataFrame:
     try:
-        # CORREÇÃO CRÍTICA: Removido ttl=0. O @st.cache_data(ttl=600) controla o tempo.
+        # CORREÇÃO CRÍTICA: Removido o ttl=0. O @st.cache_data(ttl=600) é quem controla o tempo.
         df = conn.read(worksheet=sheet_name) 
         df = df.dropna(how='all')
         
@@ -132,6 +131,10 @@ def tela_resumo():
 
 # ================== Funções de Produtos (CRUD) ==================
 def substituir_estoque_pdf(uploaded_file):
+    if not pdfplumber:
+        st.error("O processamento de PDF não está disponível. Verifique as dependências.")
+        return
+
     data = uploaded_file.read()
     stream = io.BytesIO(data)
     novos_produtos = []
@@ -232,7 +235,7 @@ def tela_produtos():
                 if pdfplumber:
                     substituir_estoque_pdf(pdf_file)
                 else:
-                    st.error("A biblioteca 'pdfplumber' não pôde ser carregada. Verifique as dependências.")
+                    st.error("A biblioteca 'pdfplumber' não pôde ser carregada. Verifique as dependências (packages.txt e requirements.txt).")
 
 
 # ================== Funções de Clientes (CRUD) ==================
