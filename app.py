@@ -1,3 +1,5 @@
+# app.py (COMPLETO E ATUALIZADO COM CORREÇÕES DE LOOP E CACHE)
+# ================= PARTE 1 - CONEXÃO COM GOOGLE SHEETS ==============
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -25,11 +27,10 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 # ================== Funções de Leitura (READ - Usando Caching) ==================
 # Função genérica para ler uma aba (sheet)
-@st.cache_data(ttl=600) # Mantém os dados em cache por 10 minutos (10 min)
+@st.cache_data(ttl=600) # Mantém os dados em cache por 10 minutos
 def load_data(sheet_name: str) -> pd.DataFrame:
     try:
-        # CORREÇÃO CRÍTICA: Removido ttl=0 para evitar ignorar o cache do st.cache_data
-        # e evitar timeouts desnecessários com o Google Sheets a cada reload do app.
+        # CORREÇÃO CRÍTICA: Removido ttl=0. O @st.cache_data(ttl=600) controla o tempo.
         df = conn.read(worksheet=sheet_name) 
         df = df.dropna(how='all')
         
@@ -75,7 +76,7 @@ def is_visitante():
     u = st.session_state.get("usuario")
     return isinstance(u, str) and u.startswith("visitante-")
 
-# ================== Login (Com Correção de Rerun) ==================
+# ================== Login ==================
 def login():
     st.title("🔐 Login")
     escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
@@ -89,8 +90,8 @@ def login():
                     st.session_state["usuario"] = usuario
                     registrar_acesso(f"login-usuario:{usuario}")
                     st.success(f"Bem-vindo(a), {usuario}!")
-                    # CORREÇÃO: Usando experimental_rerun()
-                    st.experimental_rerun() 
+                    # CORREÇÃO: Usando experimental_rerun para maior estabilidade
+                    st.experimental_rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
     else:
@@ -101,7 +102,7 @@ def login():
                     st.session_state["usuario"] = f"visitante-{nome.strip()}"
                     registrar_acesso(f"login-visitante:{nome.strip()}")
                     st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
-                    # CORREÇÃO: Usando experimental_rerun()
+                    # CORREÇÃO: Usando experimental_rerun para maior estabilidade
                     st.experimental_rerun()
 
 # ================== Tela de Resumo ==================
@@ -187,8 +188,6 @@ def adicionar_produto_manual(cod, nome, preco, qtd=10):
             
         load_data.clear() 
         st.success(f"Produto {nome} adicionado/atualizado!")
-        
-#======= Parte 2 ====================
 
 def tela_produtos():
     st.header("📦 Produtos")
@@ -369,8 +368,6 @@ def tela_vendas():
         produto_cod = int(produto_opcoes[produto_escolhido_str])
         registrar_venda(cliente_nome, produto_cod, qtd)
 
-# =============== Parte 3 ===============
-
 # ================== Relatórios ==================
 def tela_relatorios():
     st.header("📑 Relatórios")
@@ -405,7 +402,7 @@ def tela_relatorios():
         st.write(f"🧾 {data} | Cliente: {cliente} | Produto: {produto} | "
                  f"Qtd: {qtd} | Valor: R$ {total:.2f}")
 
-# ================== Navegação e Main (Com Correção de Rerun) ==================
+# ================== Navegação e Main ==================
 def menu_principal():
     st.sidebar.title("📌 Menu")
     escolha = st.sidebar.radio("Ir para:", 
@@ -426,7 +423,7 @@ def menu_principal():
     elif escolha == "Sair 🚪":
         st.session_state["usuario"] = None
         st.success("Você saiu do sistema.")
-        # CORREÇÃO: Usando experimental_rerun()
+        # CORREÇÃO: Usando experimental_rerun para maior estabilidade
         st.experimental_rerun()
 
 def main():
@@ -438,4 +435,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
