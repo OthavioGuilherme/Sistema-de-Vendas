@@ -6,7 +6,8 @@ from datetime import datetime
 import io
 import re
 import gspread 
-from streamlit_gsheets import GSheetsConnection 
+from st_gsheets_connection import GSheetsConnection
+
 
 # PDF opcional
 try:
