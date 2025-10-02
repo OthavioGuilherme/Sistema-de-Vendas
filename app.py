@@ -140,7 +140,7 @@ def load_db():
             return prods, clis
         except Exception:
             pass
-    # FIX 1: Corrigido o SyntaxError
+    # CORREÇÃO CRÍTICA DO SYNTAX ERROR: Inicializando com listas vazias
     default_clients = {
         "Tabata":, "Valquiria":, "Vanessa":, "Pamela":, "Elan":, "Claudinha":
     }
@@ -152,7 +152,7 @@ if "usuario" not in st.session_state:
 if "produtos" not in st.session_state or not st.session_state["produtos"]:
     prods_loaded, clients_loaded = load_db()
     st.session_state["produtos"] = prods_loaded or {}
-    # FIX 2: Corrigido o SyntaxError
+    # CORREÇÃO CRÍTICA DO SYNTAX ERROR: Inicializando com listas vazias
     st.session_state["clientes"] = clients_loaded or {
         "Tabata":, "Valquiria":, "Vanessa":, "Pamela":, "Elan":, "Claudinha":
     }
@@ -326,7 +326,7 @@ def tela_clientes():
                     st.warning("Cliente já existe.")
                 else:
                     # FIX 3: Inicializa com lista vazia
-                    st.session_state["clientes"][nome_limpo] = 
+                    st.session_state["clientes"][nome_limpo] =
                     save_db()
                     gsheets_adicionar_cliente(nome_limpo) 
                     st.success(f"Cliente {nome_limpo} cadastrado!")
@@ -394,7 +394,7 @@ def tela_vendas():
         quantidade = st.number_input("Quantidade", min_value=1, step=1, key="venda_qtd")
         if st.button("Adicionar venda", key="btn_adicionar_venda"):
             if produto_selecionado and produto_selecionado!= "":
-                # FIX 6: Corrigido o acesso ao índice
+                # FIX 6: Corrigido o acesso ao índice  após o split
                 cod = int(produto_selecionado.split(" - ")) 
                 p = st.session_state["produtos"][cod]
                 if quantidade > p.get("quantidade", 0):
