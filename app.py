@@ -1,20 +1,27 @@
 # ======== Parte 1 =================
-# CONFIGURAÇÕES DA PLANILHA
+# =================================================================
+# CONFIGURAÇÕES (JÁ AJUSTADO PARA SEU NOME DA PLANILHA)
+# =================================================================
 PLANILHA_NOME = "Sistema de vendas"
 ABA_VENDAS = "Vendas"                             
 ABA_CLIENTES = "Clientes"                         
 ABA_PRODUTOS = "Produtos"                         
 
-# BIBLIOTECAS
+# =================================================================
+# NOVAS BIBLIOTERCAS PARA O GOOGLE SHEETS E JSON
+# =================================================================
 import gspread
 from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
 import json 
 import streamlit as st 
+
+# ================== PARTE 1 ==================
 from datetime import datetime
 import os
 import io
 import re
 
+# PDF opcional
 try:
     import pdfplumber
 except Exception:
@@ -22,28 +29,33 @@ except Exception:
 
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
+# ================== Usuários (login) ==================
 USERS = {"othavio": "122008", "isabela": "122008"}
 LOG_FILE = "acessos.log"
-DB_FILE = "db.json"
+DB_FILE = "db.json" 
 
-# CONEXÃO GLOBAL COM GOOGLE SHEETS
+# ================== CONEXÃO GLOBAL COM GOOGLE SHEETS (USANDO SECRETS) ==================
 GSHEETS_CONECTADO = False
 gc = None 
 
-try:
-    json_string = st.secrets.get("GCP_SA_CREDENTIALS") 
-    credentials_dict = json.loads(json_string) 
-    gc = gspread.service_account_from_dict(credentials_dict)
-    GSHEETS_CONECTADO = True
-    
-except KeyError:
-    st.error("❌ ERRO DE CONFIGURAÇÃO: Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
-    st.info("Rodando sem conexão com o Google Sheets.")
-    
-except Exception as e:
-    st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
+def connect_gsheet():
+    global gc, GSHEETS_CONECTADO
+    try:
+        # Pega o JSON salvo no Streamlit Secrets
+        credentials_dict = st.secrets["GCP_SA_CREDENTIALS"]
+        gc = gspread.service_account_from_dict(credentials_dict)
+        GSHEETS_CONECTADO = True
+        st.success("✅ Conexão com Google Sheets estabelecida!")
+    except KeyError:
+        st.error("❌ ERRO DE CONFIGURAÇÃO: O Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
+        st.info("O sistema está rodando, mas sem conexão com o Google Sheets.")
+    except Exception as e:
+        st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
+        st.info("Verifique se o JSON está colado corretamente e se a Conta de Serviço tem permissão de Editor na planilha.")
 
-# Registro de acesso
+connect_gsheet()
+
+# ================== Registro de acesso ==================
 def registrar_acesso(usuario: str):
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -51,21 +63,11 @@ def registrar_acesso(usuario: str):
     except:
         pass
 
-# Funções Google Sheets
-def gsheets_append_produto(cod: int, nome: str, preco: float, quantidade: int):
-    if not GSHEETS_CONECTADO:
-        return
-    try:
-        planilha = gc.open(PLANILHA_NOME)
-        aba = planilha.worksheet(ABA_PRODUTOS)
-        nova_linha = [cod, nome, f"{preco:.2f}".replace('.',','), quantidade]
-        aba.append_row(nova_linha, value_input_option='USER_ENTERED')
-    except Exception as e:
-        st.warning(f"Falha ao salvar produto no Google Sheets: {e}")
-
+# ================== FUNÇÕES DE INTERAÇÃO COM GOOGLE SHEETS ==================
 def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: float):
     if not GSHEETS_CONECTADO:
         return
+    global gc
     try:
         data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         planilha = gc.open(PLANILHA_NOME)
@@ -79,20 +81,32 @@ def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: flo
             f"{(preco * quantidade):.2f}".replace('.',',')
         ]
         aba.append_row(nova_linha, value_input_option='USER_ENTERED')
+        st.toast("✅ Venda salva no Google Sheets!", icon='sheets')
     except Exception as e:
-        st.warning(f"Falha ao salvar venda no Google Sheets: {e}")
+        st.error(f"Falha ao salvar a venda no Google Sheets: {e}")
+        st.warning("A venda foi salva apenas localmente no JSON (db.json).")
+
+def gsheets_delete_venda(cliente: str, produto: str, valor: float):
+    if GSHEETS_CONECTADO:
+        st.warning("⚠️ Exclusão/edição foi feita apenas localmente. No Google Sheets precisa remover manualmente.")
 
 def gsheets_adicionar_cliente(nome: str):
     if not GSHEETS_CONECTADO:
         return
+    global gc
     try:
         planilha = gc.open(PLANILHA_NOME)
         aba = planilha.worksheet(ABA_CLIENTES)
         aba.append_row([nome], value_input_option='USER_ENTERED')
+        st.toast("✅ Cliente salvo no Google Sheets!", icon='sheets')
     except Exception as e:
         st.warning(f"Falha ao salvar cliente no Google Sheets: {e}")
 
-# Helpers local DB
+def gsheets_deletar_cliente(nome: str):
+    if GSHEETS_CONECTADO:
+        st.warning(f"⚠️ Cliente '{nome}' removido do sistema local. Remova manualmente do Google Sheets.")
+
+# ================== Helpers: salvar/carregar DB local ==================
 def save_db():
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -108,21 +122,39 @@ def load_db():
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            prods = {int(k): v for k, v in data.get("produtos", {}).items()}
+            prods = {}
+            for k, v in data.get("produtos", {}).items():
+                try:
+                    prods[int(k)] = v
+                except:
+                    prods[k] = v
             clis = {k: v for k, v in data.get("clientes", {}).items()}
             return prods, clis
-        except:
+        except Exception:
             pass
-    default_clients = {"Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []}
+    # ✅ corrigido: clientes padrão começam com lista vazia
+    default_clients = {
+        "Tabata": [], "Valquiria": [], "Vanessa": [], 
+        "Pamela": [], "Elan": [], "Claudinha": []
+    }
     return {}, default_clients
 
+# ================== Session State inicial ==================
 if "usuario" not in st.session_state:
     st.session_state["usuario"] = None
-if "produtos" not in st.session_state:
+if "produtos" not in st.session_state or not st.session_state["produtos"]:
     prods_loaded, clients_loaded = load_db()
     st.session_state["produtos"] = prods_loaded or {}
-    st.session_state["clientes"] = clients_loaded or {"Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []}
+    st.session_state["clientes"] = clients_loaded or {
+        "Tabata": [], "Valquiria": [], "Vanessa": [], 
+        "Pamela": [], "Elan": [], "Claudinha": []
+    }
+if "menu" not in st.session_state:
+    st.session_state["menu"] = "Resumo 📊"
+if "recarregar" not in st.session_state:
+    st.session_state["recarregar"] = False
 
+# ================== Função: is_visitante ==================
 def is_visitante():
     u = st.session_state.get("usuario")
     return isinstance(u, str) and u.startswith("visitante-")
