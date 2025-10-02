@@ -1,41 +1,79 @@
-# ======== Parte 1 =================
+# ======== Parte 1: Ajustes no Backend/Conexão =================
+
 # =================================================================
 # CONFIGURAÇÕES (JÁ AJUSTADO PARA SEU NOME DA PLANILHA)
 # =================================================================
 PLANILHA_NOME = "Sistema de vendas"
 ABA_VENDAS = "Vendas"                             
 ABA_CLIENTES = "Clientes"                         
-ABA_PRODUTOS = "Produtos"                         
+ABA_PRODUTOS = "Produtos" 
+# ... (restante dos imports e configs) ...
 
-# =================================================================
-# BIBLIOTECAS
-# =================================================================
-import gspread
-from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
-import streamlit as st
-from google.oauth2.service_account import Credentials
-from datetime import datetime
-import json
-import os
-import io
-import re
-
-# PDF opcional
-try:
-    import pdfplumber
-except Exception:
-    pdfplumber = None
-
-st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
-
-# ================== Usuários ==================
-USERS = {"othavio": "122008", "isabela": "122008"}
-LOG_FILE = "acessos.log"
-DB_FILE = "db.json"
-
-# ================== Conexão Google Sheets ==================
+# ================== Conexão Google Sheets & Sincronização ==================
 GSHEETS_CONECTADO = False
 gc = None
+
+# FUNÇÃO 1: SINCRONIZAÇÃO DE DADOS PARA O SHEETS (GRAVAÇÃO)
+def sync_to_gsheet(aba_nome: str, data: list):
+    """Grava uma lista de dados no Sheets."""
+    if not GSHEETS_CONECTADO:
+        st.warning(f"Não conectado ao Google Sheets. Dados de {aba_nome} salvos apenas localmente.")
+        return
+    try:
+        sh = gc.open(PLANILHA_NOME)
+        aba = sh.worksheet(aba_nome)
+        
+        # Lógica de gravação:
+        if aba_nome == ABA_VENDAS:
+            # Vendas: Adiciona uma nova linha
+            aba.append_row(data, value_input_option='USER_ENTERED')
+        elif aba_nome == ABA_PRODUTOS:
+            # Produtos: Limpa a aba e reescreve todos (mais simples para este modelo)
+            aba.clear()
+            # Define o cabeçalho
+            aba.append_row(["Código", "Nome", "Preço", "Estoque"])
+            # Formata os dados para escrita
+            produtos_list = [[cod, p['nome'], p['preco'], p['quantidade']] 
+                             for cod, p in st.session_state["produtos"].items()]
+            aba.append_rows(produtos_list, value_input_option='USER_ENTERED')
+        
+    except SpreadsheetNotFound:
+        st.error(f"❌ Planilha '{PLANILHA_NOME}' não encontrada no seu Drive.")
+    except WorksheetNotFound:
+        st.error(f"❌ Aba '{aba_nome}' não encontrada na planilha.")
+    except Exception as e:
+        st.error(f"❌ ERRO ao salvar no Sheets ({aba_nome}): {e}")
+
+# FUNÇÃO 2: SINCRONIZAÇÃO DE DADOS DO SHEETS (LEITURA)
+def sync_from_gsheet():
+    """Carrega dados iniciais do Sheets para o session_state."""
+    if not GSHEETS_CONECTADO:
+        return
+    try:
+        sh = gc.open(PLANILHA_NOME)
+        
+        # Carregar Produtos
+        aba_produtos = sh.worksheet(ABA_PRODUTOS)
+        dados_produtos = aba_produtos.get_all_records()
+        produtos = {}
+        for row in dados_produtos:
+            # Assume que as colunas são "Código", "Nome", "Preço", "Estoque"
+            try:
+                cod = int(row.get("Código"))
+                produtos[cod] = {
+                    "nome": str(row.get("Nome")).strip().title(),
+                    "preco": float(row.get("Preço", 0.0)),
+                    "quantidade": int(row.get("Estoque", 0))
+                }
+            except Exception:
+                continue # Pula linhas inválidas ou cabeçalho
+        
+        if produtos:
+             st.session_state["produtos"] = produtos
+             st.success("✅ Produtos carregados do Google Sheets!")
+        
+    except Exception as e:
+        st.warning(f"⚠️ Falha ao carregar dados do Sheets: {e}")
 
 def connect_gsheet():
     global gc, GSHEETS_CONECTADO
@@ -45,6 +83,10 @@ def connect_gsheet():
         credentials = Credentials.from_service_account_info(dict(creds_dict), scopes=scopes)
         gc = gspread.authorize(credentials)
         GSHEETS_CONECTADO = True
+        
+        # CHAMA A SINCRONIZAÇÃO APÓS A CONEXÃO
+        sync_from_gsheet() 
+        
     except KeyError:
         st.error("❌ Chave 'gcp_service_account' não encontrada nos Secrets")
         st.info("Rodando apenas localmente.")
@@ -52,248 +94,76 @@ def connect_gsheet():
         st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
         st.info("Verifique o JSON e permissões da Conta de Serviço.")
 
-connect_gsheet()
+connect_gsheet() # Chama a conexão e a sincronização inicial
+# ... (restante do código até o início da Parte 2) ...
 
-# ================== Registro de acesso ==================
-def registrar_acesso(usuario: str):
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat()} - {usuario}\n")
-    except:
-        pass
+# ... (Funções anteriores) ...
 
-# ================== Helpers: salvar/carregar DB local ==================
-def save_db():
-    try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump({
-                "produtos": st.session_state.get("produtos", {}),
-                "clientes": st.session_state.get("clientes", {}),
-            }, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.warning(f"Falha ao salvar DB local: {e}")
-
-def load_db():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            prods = {int(k): v for k, v in data.get("produtos", {}).items()}
-            clis = {k: v for k, v in data.get("clientes", {}).items()}
-            return prods, clis
-        except:
-            pass
-    # clientes padrão começam com lista vazia
-    default_clients = {
-        "Tabata": [], "Valquiria": [], "Vanessa": [], 
-        "Pamela": [], "Elan": [], "Claudinha": []
-    }
-    return {}, default_clients
-
-# ================== Inicialização session state ==================
-def init_db():
-    if "usuario" not in st.session_state:
-        st.session_state["usuario"] = None
-    if "produtos" not in st.session_state or not st.session_state["produtos"]:
-        prods_loaded, clients_loaded = load_db()
-        st.session_state["produtos"] = prods_loaded or {}
-        st.session_state["clientes"] = clients_loaded or {
-            "Tabata": [], "Valquiria": [], "Vanessa": [], 
-            "Pamela": [], "Elan": [], "Claudinha": []
-        }
-    if "menu" not in st.session_state:
-        st.session_state["menu"] = "Resumo 📊"
-    if "recarregar" not in st.session_state:
-        st.session_state["recarregar"] = False
-
-# ================== Função: is_visitante ==================
-def is_visitante():
-    u = st.session_state.get("usuario")
-    return isinstance(u, str) and u.startswith("visitante-")
-# ================== Parte 2 ==================
-# ================== Login ==================
-def login():
-    st.title("🔐 Login")
-    escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
-
-    if escolha == "Usuário cadastrado":
-        with st.form("form_login"):
-            usuario = st.text_input("Usuário")
-            senha = st.text_input("Senha", type="password")
-            if st.form_submit_button("Entrar"):
-                if usuario in USERS and USERS[usuario] == senha:
-                    st.session_state["usuario"] = usuario
-                    registrar_acesso(f"login-usuario:{usuario}")
-                    st.success(f"Bem-vindo(a), {usuario}!")
-                    st.rerun()
-                else:
-                    st.error("Usuário ou senha incorretos.")
-    else:
-        with st.form("form_visitante"):
-            nome = st.text_input("Digite seu nome")
-            if st.form_submit_button("Entrar como visitante"):
-                if nome.strip():
-                    st.session_state["usuario"] = f"visitante-{nome.strip()}"
-                    registrar_acesso(f"login-visitante:{nome.strip()}")
-                    st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
-                    st.rerun()
-
-# ================== Tela de Resumo ==================
-def tela_resumo():
-    st.header("📊 Resumo de Vendas")
-    visitante = is_visitante()
-    total_geral = 0.0
-    for cliente, vendas in st.session_state["clientes"].items():
-        total_cliente = sum((v.get("preco", 0.0) * v.get("quantidade", 0)) for v in vendas)
-        total_geral += total_cliente
-    comissao = total_geral * 0.25
-    if visitante:
-        st.metric("💰 Total Geral de Vendas", "R$ *****")
-        st.metric("🧾 Comissão (25%)", "R$ *****")
-    else:
-        st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
-        st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
-
-# ================== PDF (Importar Estoque) ==================
-def substituir_estoque_pdf(uploaded_file):
-    data = uploaded_file.read()
-    stream = io.BytesIO(data)
-    novos_produtos = {}
-
-    linha_regex = re.compile(r'^\s*(\d+)\s+(\d{5})\s+(.+?)\s+([\d.,]+)\s*$')
-
-    try:
-        with pdfplumber.open(stream) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if not text:
-                    continue
-                for linha in text.splitlines():
-                    m = linha_regex.match(linha.strip())
-                    if m:
-                        qtd_s, cod_s, nome, preco_s = m.groups()
-                        try:
-                            qtd = int(qtd_s)
-                        except:
-                            qtd = 0
-                        try:
-                            cod = int(cod_s)
-                        except:
-                            cod = None
-                        try:
-                            preco = float(preco_s.replace('.', '').replace(',', '.'))
-                        except:
-                            preco = 0.0
-                        if cod is not None:
-                            novos_produtos[cod] = {
-                                "nome": nome.title(),
-                                "preco": preco,
-                                "quantidade": qtd
-                            }
-    except Exception as e:
-        st.error(f"Erro ao ler PDF: {e}")
-        return
-
-    if not novos_produtos:
-        st.error("Nenhum produto válido encontrado no PDF.")
-        return
-    st.session_state["produtos"] = novos_produtos
-    save_db()
-    st.success("✅ Estoque atualizado a partir do PDF!")
-
-# ================== Produtos ==================
 def adicionar_produto_manual(cod, nome, preco, qtd=10):
     cod = int(cod)
-    st.session_state["produtos"][cod] = {
+    produto_data = {
         "nome": nome.strip(),
         "preco": float(preco),
         "quantidade": qtd
     }
-    save_db()
+    st.session_state["produtos"][cod] = produto_data
+    save_db() # Salva localmente
+    
+    # 🌟 CORREÇÃO 1: Salvar Produtos no Sheets
+    sync_to_gsheet(ABA_PRODUTOS, []) # Usa a função que reescreve todos
+    
     st.success(f"Produto {nome} adicionado/atualizado!")
 
-def tela_produtos():
-    st.header("📦 Produtos")
-    visitante = is_visitante()
-    acao = st.radio("Ação", ["Adicionar", "Listar/Buscar", "Importar PDF"], horizontal=True)
+# ... (Função tela_produtos - sem alteração significativa) ...
 
-    if acao == "Adicionar":
-        if visitante:
-            st.info("🔒 Visitantes não podem adicionar produtos.")
-            return
-        cod = st.number_input("Código", min_value=1, step=1)
-        nome = st.text_input("Nome do produto")
-        preco = st.number_input("Preço", min_value=0.0, step=0.10, format="%.2f")
-        quantidade = st.number_input("Quantidade inicial", min_value=0, step=1)
-        if st.button("Salvar produto"):
-            if cod in st.session_state["produtos"]:
-                st.warning("Código já existe.")
-            elif not nome.strip():
-                st.warning("Informe um nome válido.")
-            else:
-                adicionar_produto_manual(cod, nome, preco, quantidade)
+# ... (Funções de Clientes) ...
 
-    elif acao == "Listar/Buscar":
-        termo = st.text_input("Buscar por nome ou código").lower()
-        st.subheader("Lista de Produtos")
-        for cod, dados in sorted(st.session_state["produtos"].items(), key=lambda x: str(x)):
-            if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
-                st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f}) | Estoque: {dados.get('quantidade', 0)}")
-
-    elif acao == "Importar PDF":
-        if visitante:
-            st.info("🔒 Visitantes não podem importar PDF.")
-            return
-        pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
-        if pdf_file is not None:
-            if st.button("Substituir estoque pelo PDF"):
-                substituir_estoque_pdf(pdf_file)
-# ================== Parte 3 ==================
-# ================== Clientes ==================
-def tela_clientes():
-    st.header("👥 Clientes")
-    visitante = is_visitante()
-    acao = st.radio("Ação", ["Adicionar", "Listar"], horizontal=True)
-
-    if acao == "Adicionar":
-        if visitante:
-            st.info("🔒 Visitantes não podem adicionar clientes.")
-            return
-        nome = st.text_input("Nome do cliente")
-        if st.button("Salvar cliente"):
-            if not nome.strip():
-                st.warning("Informe um nome válido.")
-            elif nome in st.session_state["clientes"]:
-                st.warning("Cliente já existe.")
-            else:
-                st.session_state["clientes"][nome] = []
-                save_db()
-                st.success(f"Cliente {nome} adicionado!")
-
-    elif acao == "Listar":
-        st.subheader("Lista de Clientes")
-        for cliente in sorted(st.session_state["clientes"].keys()):
-            st.write(cliente)
-
-# ================== Vendas ==================
 def registrar_venda(cliente, codigo, quantidade):
     produtos = st.session_state["produtos"]
     if codigo not in produtos:
         st.error("Produto não encontrado.")
         return
-    if produtos[codigo].get("quantidade", 0) < quantidade:
-        st.error("Estoque insuficiente.")
-        return
-    produtos[codigo]["quantidade"] -= quantidade
-    st.session_state["clientes"][cliente].append({
+    # ... (verificação de estoque e outras lógicas) ...
+    
+    venda_data = {
         "codigo": codigo,
         "nome": produtos[codigo]["nome"],
         "preco": produtos[codigo]["preco"],
         "quantidade": quantidade,
         "data": datetime.now().strftime("%d/%m/%Y %H:%M")
-    })
-    save_db()
+    }
+    
+    produtos[codigo]["quantidade"] -= quantidade
+    st.session_state["clientes"][cliente].append(venda_data)
+    save_db() # Salva localmente
+    
+    # 🌟 CORREÇÃO 1: Salvar Vendas no Sheets
+    # Formato da linha para o Sheets: [Cliente, Código, Nome, Preço, Quantidade, Data]
+    linha_venda = [cliente, codigo, venda_data["nome"], venda_data["preco"], 
+                   venda_data["quantidade"], venda_data["data"]]
+    sync_to_gsheet(ABA_VENDAS, linha_venda) 
+    
+    # 🌟 Sincroniza a atualização de estoque (Produto)
+    sync_to_gsheet(ABA_PRODUTOS, [])
+    
     st.success("Venda registrada!")
+
+# Função para filtrar produtos (CORREÇÃO 3)
+def autocomplete_vendas(input_cod):
+    """Filtra a lista de produtos com base no código digitado."""
+    input_cod = str(input_cod).strip()
+    if len(input_cod) < 2: # 🌟 CORREÇÃO 3: Inicia a busca após 2 dígitos
+        return []
+
+    opcoes_encontradas = []
+    for cod, dados in st.session_state["produtos"].items():
+        cod_str = str(cod)
+        # Filtra se o código digitado for o início do código do produto
+        if cod_str.startswith(input_cod):
+            # Formata a string de exibição: "CÓDIGO - NOME (R$ PREÇO)"
+            opcoes_encontradas.append(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f})")
+    return opcoes_encontradas
+
 
 def tela_vendas():
     st.header("🛒 Vendas")
@@ -304,47 +174,64 @@ def tela_vendas():
         st.warning("Cadastre produtos primeiro.")
         return
 
+    # 🌟 CORREÇÃO 3: Alteração para autocompletar dinâmico (Input + Select)
     cliente = st.selectbox("Selecione o cliente", list(st.session_state["clientes"].keys()))
-    codigo = st.number_input("Código do produto", min_value=1, step=1)
-    quantidade = st.number_input("Quantidade", min_value=1, step=1)
+    
+    col1, col2 = st.columns([3, 1])
+    
+    # Entrada de texto para buscar o código
+    codigo_input = col1.text_input("Digite o Código do produto (mín. 2 dígitos)", key="venda_cod_input")
+
+    # Obtém as opções filtradas
+    opcoes = autocomplete_vendas(codigo_input)
+    
+    # Se encontrou opções, mostra o SelectBox (o usuário deve selecionar)
+    if opcoes:
+        produto_selecionado_str = col1.selectbox("Selecione o produto", opcoes, key="venda_produto_select")
+        # Extrai o código (o primeiro número da string)
+        try:
+            codigo = int(produto_selecionado_str.split(' - ')[0])
+        except:
+            codigo = None # Caso a string não esteja formatada
+    else:
+        produto_selecionado_str = None
+        codigo = None # Nenhum código válido selecionado ou encontrado
+
+    # Quantidade na coluna 2
+    quantidade = col2.number_input("Quantidade", min_value=1, step=1)
+    
+    # ----------------------------------------------------------------------
+
     if st.button("Registrar venda"):
-        registrar_venda(cliente, codigo, quantidade)
+        if codigo is None:
+            st.error("Por favor, digite um código válido e selecione o produto na lista.")
+        else:
+            registrar_venda(cliente, codigo, quantidade)
 
-    st.subheader("📋 Histórico de Vendas")
-    for cliente, vendas in st.session_state["clientes"].items():
-        if vendas:
-            st.write(f"### {cliente}")
-            for v in vendas:
-                st.write(f"- {v['data']} | {v['nome']} (x{v['quantidade']}) - R$ {v['preco']:.2f}")
+    # ... (Histórico de vendas) ...
 
-# ================== Relatórios ==================
-def tela_relatorios():
-    st.header("📑 Relatórios")
-    visitante = is_visitante()
-    for cliente, vendas in st.session_state["clientes"].items():
-        if vendas:
-            total = sum(v["preco"] * v["quantidade"] for v in vendas)
-            if visitante:
-                st.write(f"Cliente: {cliente} — Total: R$ *****")
-            else:
-                st.write(f"Cliente: {cliente} — Total: R$ {total:.2f}")
+# ... (Relatórios) ...
 
-# ================== Menu ==================
+# 🌟 CORREÇÃO 2: Alteração do Menu (Lateral para Superior)
 def menu():
-    st.sidebar.title("📌 Menu")
-    opcoes = ["Resumo", "Produtos", "Clientes", "Vendas", "Relatórios", "Sair"]
-    escolha = st.sidebar.radio("Ir para:", opcoes)
-    if escolha == "Resumo":
+    # 🌟 Substitui st.sidebar.radio por st.tabs() para menu superior
+    opcoes = ["Resumo 📊", "Produtos 📦", "Clientes 👥", "Vendas 🛒", "Relatórios 📑", "Sair 🚪"]
+    
+    # Cria o menu superior como abas
+    aba_resumo, aba_produtos, aba_clientes, aba_vendas, aba_relatorios, aba_sair = st.tabs(opcoes)
+
+    with aba_resumo:
         tela_resumo()
-    elif escolha == "Produtos":
+    with aba_produtos:
         tela_produtos()
-    elif escolha == "Clientes":
+    with aba_clientes:
         tela_clientes()
-    elif escolha == "Vendas":
+    with aba_vendas:
         tela_vendas()
-    elif escolha == "Relatórios":
+    with aba_relatorios:
         tela_relatorios()
-    elif escolha == "Sair":
+    with aba_sair:
+        st.header("Sair do Sistema")
         if st.button("Confirmar saída"):
             st.session_state.clear()
             st.rerun()
@@ -352,10 +239,16 @@ def menu():
 # ================== Main ==================
 def main():
     init_db()
+    
+    # Move a exibição do usuário para o topo, antes do menu
+    if st.session_state.get("usuario"):
+        st.sidebar.title("📌 Sistema de Vendas")
+        st.sidebar.write(f"👤 **Logado:** {st.session_state['usuario']}")
+        
     if not st.session_state.get("usuario"):
         login()
     else:
-        st.sidebar.write(f"👤 Usuário: {st.session_state['usuario']}")
+        # 🌟 O menu agora é superior
         menu()
 
 if __name__ == "__main__":
