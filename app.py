@@ -7,12 +7,12 @@ ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"                         
 
 # =================================================================
-# NOVAS BIBLIOTECAS PARA O GOOGLE SHEETS E JSON
+# NOVAS BIBLIOTERCAS PARA O GOOGLE SHEETS E JSON
 # =================================================================
 import gspread
 from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
 import json 
-import streamlit as st # Importado no início para ser acessível globalmente
+import streamlit as st 
 
 # ================== PARTE 1 ==================
 from datetime import datetime
@@ -34,30 +34,25 @@ LOG_FILE = "acessos.log"
 DB_FILE = "db.json" 
 
 # ================== CONEXÃO GLOBAL COM GOOGLE SHEETS (USANDO SECRETS) ==================
-# Variável para rastrear o estado da conexão
 GSHEETS_CONECTADO = False
-gc = None # Inicializa o cliente Sheets como None
+gc = None 
 
 try:
     # 1. Tenta ler o conteúdo JSON da chave 'GCP_SA_CREDENTIALS' salva no Streamlit Secrets
-    # O Streamlit expõe Secrets como um dicionário
-    json_string = st.secrets 
+    json_string = st.secrets # Acessa a chave exata
     
     # 2. Converte a string JSON em um dicionário Python
     credentials_dict = json.loads(json_string) 
     
-    # 3. Conecta usando o dicionário (o método correto para secrets)
+    # 3. Conecta usando o dicionário
     gc = gspread.service_account_from_dict(credentials_dict)
     GSHEETS_CONECTADO = True
     
 except KeyError:
-    # Este erro ocorre se a chave GCP_SA_CREDENTIALS não for encontrada nos Secrets
-    # É o que estava causando a falha "ARQUIVO DE CHAVE NÃO ENCONTRADO"
-    st.error("❌ ERRO DE CONFIGURAÇÃO: O Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
-    st.info("O sistema está rodando, mas sem conexão com o Google Sheets. Verifique o nome da chave.")
+    st.error("❌ ERRO DE CONFIGURAÇÃO: O Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets. Verifique o nome.")
+    st.info("O sistema está rodando, mas sem conexão com o Google Sheets.")
     
 except Exception as e:
-    # Para qualquer outro erro (falha ao analisar o JSON ou erro de permissão)
     st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
     st.info("Verifique se o JSON está colado corretamente no Secrets e se a Conta de Serviço tem permissão de Editor na planilha.")
 
@@ -87,7 +82,7 @@ def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: flo
             cliente, 
             produto, 
             quantidade, 
-            f"{preco:.2f}".replace('.',','), # Formato monetário brasileiro
+            f"{preco:.2f}".replace('.',','), 
             f"{(preco * quantidade):.2f}".replace('.',',')
         ]
         
@@ -99,7 +94,6 @@ def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: flo
         st.warning("A venda foi salva apenas localmente no JSON (db.json).")
 
 def gsheets_delete_venda(cliente: str, produto: str, valor: float):
-    # NOTA: Apenas notifica o usuário sobre a exclusão que ocorreu localmente
     if GSHEETS_CONECTADO:
         st.warning("AVISO: A exclusão/edição de venda foi feita apenas localmente. No Google Sheets, a linha deve ser removida/corrigida manualmente, se necessário.")
 
@@ -117,7 +111,6 @@ def gsheets_adicionar_cliente(nome: str):
         st.warning(f"Falha ao salvar cliente no Google Sheets: {e}")
 
 def gsheets_deletar_cliente(nome: str):
-    # NOTA: Apenas notifica o usuário sobre a exclusão que ocorreu localmente
     if GSHEETS_CONECTADO:
         st.warning(f"AVISO: Cliente '{nome}' removido do sistema local. Remova manualmente do Google Sheets.")
 
@@ -147,6 +140,7 @@ def load_db():
             return prods, clis
         except Exception:
             pass
+    # FIX 1: Corrigido o SyntaxError aqui
     default_clients = {
         "Tabata":, "Valquiria":, "Vanessa":, "Pamela":, "Elan":, "Claudinha":
     }
@@ -158,6 +152,7 @@ if "usuario" not in st.session_state:
 if "produtos" not in st.session_state or not st.session_state["produtos"]:
     prods_loaded, clients_loaded = load_db()
     st.session_state["produtos"] = prods_loaded or {}
+    # FIX 2: Corrigido o SyntaxError aqui
     st.session_state["clientes"] = clients_loaded or {
         "Tabata":, "Valquiria":, "Vanessa":, "Pamela":, "Elan":, "Claudinha":
     }
@@ -278,6 +273,7 @@ def adicionar_produto_manual(cod, nome, preco, qtd=10):
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
+    # FIX 4: Corrigido o erro de lista faltando
     acao = st.radio("Ação",, horizontal=True)
 
     if acao == "Adicionar":
@@ -329,7 +325,8 @@ def tela_clientes():
                 elif nome_limpo in st.session_state["clientes"]:
                     st.warning("Cliente já existe.")
                 else:
-                    st.session_state["clientes"][nome_limpo] =
+                    # FIX 3: Inicializa com lista vazia
+                    st.session_state["clientes"][nome_limpo] = 
                     save_db()
                     gsheets_adicionar_cliente(nome_limpo) 
                     st.success(f"Cliente {nome_limpo} cadastrado!")
@@ -341,7 +338,8 @@ def tela_clientes():
     if not st.session_state["clientes"]:
         st.info("Nenhum cliente cadastrado.")
     for cliente in list(st.session_state["clientes"].keys()):
-        cols = st.columns()
+        # FIX 5: Colunas ajustadas
+        cols = st.columns() 
         cols.write(cliente)
         # botão visualizar vendas
         if cols.button("Ver Vendas", key=f"vervendas_{cliente}"):
@@ -396,7 +394,8 @@ def tela_vendas():
         quantidade = st.number_input("Quantidade", min_value=1, step=1, key="venda_qtd")
         if st.button("Adicionar venda", key="btn_adicionar_venda"):
             if produto_selecionado and produto_selecionado!= "":
-                cod = int(produto_selecionado.split(" - "))
+                # FIX 6: Corrigido o acesso ao índice  após o split
+                cod = int(produto_selecionado.split(" - ")) 
                 p = st.session_state["produtos"][cod]
                 if quantidade > p.get("quantidade", 0):
                     st.warning(f"Estoque insuficiente! Disponível: {p.get('quantidade',0)}")
@@ -405,7 +404,6 @@ def tela_vendas():
                     p["quantidade"] -= quantidade  # atualiza estoque
                     st.session_state["clientes"][cliente_sel] = vendas
                     
-                    # CHAMADA CRUCIAL AO GOOGLE SHEETS
                     gsheets_append_venda(cliente_sel, p["nome"], quantidade, p["preco"]) 
                     
                     save_db()
@@ -434,7 +432,6 @@ def tela_vendas():
         else:
             if col2.button("Apagar", key=f"apagar_{cliente_sel}_{idx}"):
                 
-                # CHAMADA AO GOOGLE SHEETS (Apenas um aviso)
                 gsheets_delete_venda(cliente_sel, nome, preco * quantidade) 
                 
                 vendas.pop(idx)
@@ -450,8 +447,7 @@ def tela_vendas():
                 if diff > st.session_state["produtos"][cod]["quantidade"]:
                     st.warning(f"Estoque insuficiente! Disponível: {st.session_state['produtos'][cod]['quantidade']}")
                 else:
-                    # ATENÇÃO: Edição de venda no Sheets é complexa. Manteremos a edição apenas local.
-                    gsheets_delete_venda(cliente_sel, nome, preco * quantidade) # Aviso de edição/remoção
+                    gsheets_delete_venda(cliente_sel, nome, preco * quantidade) 
                     
                     vendas[idx]["quantidade"] = nova_qtd
                     st.session_state["produtos"][cod]["quantidade"] -= diff
@@ -486,6 +482,7 @@ def tela_relatorios():
 
 # ================== NAVEGAÇÃO ==================
 def main_tabs():
+    # FIX 7: Tabs definidas e usadas corretamente
     tabs = st.tabs()
     with tabs: tela_resumo()
     with tabs: tela_clientes()
