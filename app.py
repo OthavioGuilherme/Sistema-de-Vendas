@@ -8,18 +8,16 @@ ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"                         
 
 # =================================================================
-# NOVAS BIBLIOTERCAS PARA O GOOGLE SHEETS E JSON
+# BIBLIOTECAS NECESSÁRIAS
 # =================================================================
 import gspread
 from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
-import json 
-import streamlit as st 
-
-# ================== PARTE 1 ==================
-from datetime import datetime
+import streamlit as st
 import os
 import io
 import re
+import json
+from datetime import datetime
 
 # PDF opcional
 try:
@@ -34,14 +32,14 @@ USERS = {"othavio": "122008", "isabela": "122008"}
 LOG_FILE = "acessos.log"
 DB_FILE = "db.json" 
 
-# ================== CONEXÃO GLOBAL COM GOOGLE SHEETS (USANDO SECRETS) ==================
+# ================== CONEXÃO GLOBAL COM GOOGLE SHEETS ==================
 GSHEETS_CONECTADO = False
-gc = None 
+gc = None
 
 def connect_gsheet():
     global gc, GSHEETS_CONECTADO
     try:
-        # Pega o JSON salvo no Streamlit Secrets
+        # Pega o JSON salvo no Streamlit Secrets (já é dict, não precisa json.loads)
         credentials_dict = st.secrets["GCP_SA_CREDENTIALS"]
         gc = gspread.service_account_from_dict(credentials_dict)
         GSHEETS_CONECTADO = True
@@ -53,6 +51,7 @@ def connect_gsheet():
         st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
         st.info("Verifique se o JSON está colado corretamente e se a Conta de Serviço tem permissão de Editor na planilha.")
 
+# Chama a função para conectar
 connect_gsheet()
 
 # ================== Registro de acesso ==================
@@ -67,7 +66,6 @@ def registrar_acesso(usuario: str):
 def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: float):
     if not GSHEETS_CONECTADO:
         return
-    global gc
     try:
         data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         planilha = gc.open(PLANILHA_NOME)
@@ -93,7 +91,6 @@ def gsheets_delete_venda(cliente: str, produto: str, valor: float):
 def gsheets_adicionar_cliente(nome: str):
     if not GSHEETS_CONECTADO:
         return
-    global gc
     try:
         planilha = gc.open(PLANILHA_NOME)
         aba = planilha.worksheet(ABA_CLIENTES)
@@ -132,7 +129,7 @@ def load_db():
             return prods, clis
         except Exception:
             pass
-    # ✅ corrigido: clientes padrão começam com lista vazia
+    # Clientes padrão começam com lista vazia
     default_clients = {
         "Tabata": [], "Valquiria": [], "Vanessa": [], 
         "Pamela": [], "Elan": [], "Claudinha": []
