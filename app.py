@@ -1,3 +1,18 @@
+# =================================================================
+# CONFIGURAÇÕES (AGORA COM O NOME DA SUA PLANILHA)
+# =================================================================
+PLANILHA_NOME = "Sistema de vendas"  # <-- NOME EXATO DA SUA PLANILHA!
+ABA_VENDAS = "Vendas"                             
+ABA_CLIENTES = "Clientes"                         
+ABA_PRODUTOS = "Produtos"                         
+CHAVE_ARQUIVO = 'credentials.json'                
+
+# =================================================================
+# NOVAS BIBLIOTECAS PARA O GOOGLE SHEETS
+# =================================================================
+import gspread
+from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
+
 # ================== PARTE 1 ==================
 import streamlit as st
 from datetime import datetime
@@ -17,7 +32,20 @@ st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wid
 # ================== Usuários (login) ==================
 USERS = {"othavio": "122008", "isabela": "122008"}  # usuários e senhas simples
 LOG_FILE = "acessos.log"
-DB_FILE = "db.json"
+DB_FILE = "db.json" # Mantido para dados de estoque/clientes locais
+
+# ================== CONEXÃO GLOBAL COM GOOGLE SHEETS ==================
+# Tentativa de conexão única ao iniciar o app
+try:
+    gc = gspread.service_account(filename=CHAVE_ARQUIVO)
+    GSHEETS_CONECTADO = True
+except FileNotFoundError:
+    st.error(f"❌ ARQUIVO DE CHAVE NÃO ENCONTRADO: '{CHAVE_ARQUIVO}'. O sistema está rodando, mas sem conexão com o Google Sheets.")
+    GSHEETS_CONECTADO = False
+except Exception as e:
+    st.error(f"❌ ERRO AO CONECTAR COM GOOGLE SHEETS: {e}")
+    st.info("Verifique se ativou as APIs e se a Conta de Serviço tem permissão de Editor.")
+    GSHEETS_CONECTADO = False
 
 # ================== Registro de acesso ==================
 def registrar_acesso(usuario: str):
@@ -27,7 +55,57 @@ def registrar_acesso(usuario: str):
     except:
         pass
 
-# ================== Helpers: salvar/carregar DB ==================
+# ================== FUNÇÕES DE INTERAÇÃO COM GOOGLE SHEETS ==================
+
+def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: float):
+    """Salva uma venda na aba 'Vendas' do Google Sheets."""
+    if not GSHEETS_CONECTADO:
+        return
+    try:
+        data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        planilha = gc.open(PLANILHA_NOME)
+        aba = planilha.worksheet(ABA_VENDAS)
+        
+        # A ordem deve ser: Data, Cliente, Produto, Quantidade, Preço Unitário, Total
+        nova_linha = [
+            data_registro, 
+            cliente, 
+            produto, 
+            quantidade, 
+            f"{preco:.2f}".replace('.',','), # Formato monetário brasileiro
+            f"{(preco * quantidade):.2f}".replace('.',',')
+        ]
+        
+        aba.append_row(nova_linha, value_input_option='USER_ENTERED')
+        st.toast("✅ Venda salva no Google Sheets!", icon='sheets')
+        
+    except Exception as e:
+        st.error(f"Falha ao salvar a venda no Google Sheets: {e}")
+        st.warning("A venda foi salva apenas localmente no JSON (db.json).")
+
+def gsheets_delete_venda(cliente: str, produto: str, valor: float):
+    # NOTA: Deletar diretamente no Google Sheets é mais complexo. Apenas alerta o usuário.
+    if GSHEETS_CONECTADO:
+        st.warning("AVISO: A exclusão/edição de venda foi feita apenas localmente. No Google Sheets, a linha deve ser removida/corrigida manualmente, se necessário.")
+
+def gsheets_adicionar_cliente(nome: str):
+    """Adiciona o nome do cliente na aba 'Clientes' do Google Sheets."""
+    if not GSHEETS_CONECTADO:
+        return
+    try:
+        planilha = gc.open(PLANILHA_NOME)
+        aba = planilha.worksheet(ABA_CLIENTES)
+        aba.append_row([nome], value_input_option='USER_ENTERED')
+        st.toast("✅ Cliente salvo no Google Sheets!", icon='sheets')
+    except Exception as e:
+        st.warning(f"Falha ao salvar cliente no Google Sheets: {e}")
+
+def gsheets_deletar_cliente(nome: str):
+    # NOTA: Assim como nas vendas, a remoção é complexa. Apenas notifica o usuário.
+    if GSHEETS_CONECTADO:
+        st.warning(f"AVISO: Cliente '{nome}' removido do sistema local. Remova manualmente do Google Sheets.")
+
+# ================== Helpers: salvar/carregar DB local ==================
 def save_db():
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -36,7 +114,7 @@ def save_db():
                 "clientes": st.session_state.get("clientes", {}),
             }, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        st.warning(f"Falha ao salvar DB: {e}")
+        st.warning(f"Falha ao salvar DB local: {e}")
 
 def load_db():
     if os.path.exists(DB_FILE):
@@ -76,6 +154,7 @@ if "recarregar" not in st.session_state:
 def is_visitante():
     u = st.session_state.get("usuario")
     return isinstance(u, str) and u.startswith("visitante-")
+
 # ================== PARTE 2 ==================
 # ================== Login ==================
 def login():
@@ -168,6 +247,7 @@ def substituir_estoque_pdf(uploaded_file):
     save_db()
     st.success("✅ Estoque atualizado a partir do PDF!")
 
+
 # ================== Produtos ==================
 def adicionar_produto_manual(cod, nome, preco, qtd=10):
     cod = int(cod)
@@ -215,6 +295,7 @@ def tela_produtos():
         if pdf_file is not None:
             if st.button("Substituir estoque pelo PDF"):
                 substituir_estoque_pdf(pdf_file)
+
 # ================== PARTE 3 ==================
 # ================== Clientes ==================
 def tela_clientes():
@@ -226,14 +307,16 @@ def tela_clientes():
         with st.form("form_cliente"):
             nome = st.text_input("Nome do Cliente", key="form_cliente_nome")
             if st.form_submit_button("Cadastrar"):
-                if not nome.strip():
+                nome_limpo = nome.strip()
+                if not nome_limpo:
                     st.warning("Informe um nome válido.")
-                elif nome.strip() in st.session_state["clientes"]:
+                elif nome_limpo in st.session_state["clientes"]:
                     st.warning("Cliente já existe.")
                 else:
-                    st.session_state["clientes"][nome.strip()] = []
+                    st.session_state["clientes"][nome_limpo] = []
                     save_db()
-                    st.success(f"Cliente {nome.strip()} cadastrado!")
+                    gsheets_adicionar_cliente(nome_limpo) # <-- CHAMADA AO GOOGLE SHEETS
+                    st.success(f"Cliente {nome_limpo} cadastrado!")
     else:
         st.info("🔒 Visitantes não podem cadastrar clientes.")
 
@@ -255,6 +338,7 @@ def tela_clientes():
             confirmar = cols[2].checkbox("Confirmar", key=confirmar_key)
             if confirmar:
                 if cols[2].button(f"🗑️ Apagar", key=f"btn_apagar_{cliente}"):
+                    gsheets_deletar_cliente(cliente) # <-- CHAMADA AO GOOGLE SHEETS (alerta)
                     st.session_state["clientes"].pop(cliente, None)
                     save_db()
                     if st.session_state.get("venda_cliente_selecionado") == cliente:
@@ -304,6 +388,10 @@ def tela_vendas():
                     vendas.append({"cod": cod, "nome": p["nome"], "preco": p["preco"], "quantidade": quantidade})
                     p["quantidade"] -= quantidade  # atualiza estoque
                     st.session_state["clientes"][cliente_sel] = vendas
+                    
+                    # CHAMADA CRUCIAL AO GOOGLE SHEETS
+                    gsheets_append_venda(cliente_sel, p["nome"], quantidade, p["preco"]) 
+                    
                     save_db()
                     st.success(f"Venda adicionada ao cliente {cliente_sel}!")
                     st.rerun()
@@ -329,18 +417,26 @@ def tela_vendas():
             col3.number_input("Qtde", min_value=1, value=quantidade, key=f"editar_disabled_{cliente_sel}_{idx}", disabled=True)
         else:
             if col2.button("Apagar", key=f"apagar_{cliente_sel}_{idx}"):
+                
+                # CHAMADA AO GOOGLE SHEETS (Apenas um aviso)
+                gsheets_delete_venda(cliente_sel, nome, preco * quantidade) 
+                
                 vendas.pop(idx)
                 st.session_state["clientes"][cliente_sel] = vendas
                 st.session_state["produtos"][cod]["quantidade"] += quantidade  # devolve ao estoque
                 save_db()
                 st.success("Venda apagada")
                 st.rerun()
+            
             nova_qtd = col3.number_input("Qtde", min_value=1, value=quantidade, key=f"editar_{cliente_sel}_{idx}")
             if col3.button("Salvar", key=f"salvar_{cliente_sel}_{idx}"):
                 diff = nova_qtd - quantidade
                 if diff > st.session_state["produtos"][cod]["quantidade"]:
                     st.warning(f"Estoque insuficiente! Disponível: {st.session_state['produtos'][cod]['quantidade']}")
                 else:
+                    # ATENÇÃO: Edição de venda no Sheets é complexa. Manteremos a edição apenas local.
+                    gsheets_delete_venda(cliente_sel, nome, preco * quantidade) # Aviso de edição/remoção
+                    
                     vendas[idx]["quantidade"] = nova_qtd
                     st.session_state["produtos"][cod]["quantidade"] -= diff
                     st.session_state["clientes"][cliente_sel] = vendas
@@ -383,6 +479,11 @@ def main_tabs():
     with tabs[5]:
         st.header("⚙️ Configuração")
         st.write(f"Usuário atual: **{st.session_state.get('usuario', '---')}**")
+        if GSHEETS_CONECTADO:
+             st.success("✅ Conectado ao Google Sheets.")
+        else:
+             st.error("❌ Desconectado do Google Sheets. Verifique 'credentials.json' e permissões.")
+             
         if st.button("🚪 Sair"):
             st.session_state.clear()
             st.session_state["usuario"] = None
