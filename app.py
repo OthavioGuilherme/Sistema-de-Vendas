@@ -1,23 +1,23 @@
-# ======== Parte 1 =================
+# ================= PARTE 1 =================
 # =================================================================
-# CONFIGURAÇÕES (JÁ AJUSTADO PARA SEU NOME DA PLANILHA)
+# CONFIGURAÇÕES (AJUSTE NOME DA PLANILHA)
 # =================================================================
 PLANILHA_NOME = "Sistema de vendas"
-ABA_VENDAS = "Vendas"                             
-ABA_CLIENTES = "Clientes"                         
-ABA_PRODUTOS = "Produtos"                         
+ABA_VENDAS = "Vendas"
+ABA_CLIENTES = "Clientes"
+ABA_PRODUTOS = "Produtos"
 
 # =================================================================
-# BIBLIOTECAS NECESSÁRIAS
+# BIBLIOTECAS
 # =================================================================
+import streamlit as st
 import gspread
 from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
-import streamlit as st
+import json
+from datetime import datetime
 import os
 import io
 import re
-import json
-from datetime import datetime
 
 # PDF opcional
 try:
@@ -30,28 +30,24 @@ st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wid
 # ================== Usuários (login) ==================
 USERS = {"othavio": "122008", "isabela": "122008"}
 LOG_FILE = "acessos.log"
-DB_FILE = "db.json" 
+DB_FILE = "db.json"
 
-# ================== CONEXÃO GLOBAL COM GOOGLE SHEETS ==================
+# ================== Conexão com Google Sheets ==================
 GSHEETS_CONECTADO = False
 gc = None
 
 def connect_gsheet():
     global gc, GSHEETS_CONECTADO
     try:
-        # Pega o JSON salvo no Streamlit Secrets (já é dict, não precisa json.loads)
-        credentials_dict = st.secrets["GCP_SA_CREDENTIALS"]
+        json_string = st.secrets.get("GCP_SA_CREDENTIALS")
+        credentials_dict = json.loads(json_string)
         gc = gspread.service_account_from_dict(credentials_dict)
         GSHEETS_CONECTADO = True
-        st.success("✅ Conexão com Google Sheets estabelecida!")
-    except KeyError:
-        st.error("❌ ERRO DE CONFIGURAÇÃO: O Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
-        st.info("O sistema está rodando, mas sem conexão com o Google Sheets.")
     except Exception as e:
+        GSHEETS_CONECTADO = False
         st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
         st.info("Verifique se o JSON está colado corretamente e se a Conta de Serviço tem permissão de Editor na planilha.")
 
-# Chama a função para conectar
 connect_gsheet()
 
 # ================== Registro de acesso ==================
@@ -62,28 +58,28 @@ def registrar_acesso(usuario: str):
     except:
         pass
 
-# ================== FUNÇÕES DE INTERAÇÃO COM GOOGLE SHEETS ==================
+# ================== Funções Google Sheets ==================
 def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: float):
     if not GSHEETS_CONECTADO:
         return
+    global gc
     try:
         data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         planilha = gc.open(PLANILHA_NOME)
         aba = planilha.worksheet(ABA_VENDAS)
         nova_linha = [
-            data_registro, 
-            cliente, 
-            produto, 
-            quantidade, 
-            f"{preco:.2f}".replace('.',','), 
-            f"{(preco * quantidade):.2f}".replace('.',',')
+            data_registro,
+            cliente,
+            produto,
+            quantidade,
+            f"{preco:.2f}".replace('.', ','),
+            f"{(preco * quantidade):.2f}".replace('.', ',')
         ]
         aba.append_row(nova_linha, value_input_option='USER_ENTERED')
         st.toast("✅ Venda salva no Google Sheets!", icon='sheets')
     except Exception as e:
-        st.error(f"Falha ao salvar a venda no Google Sheets: {e}")
-        st.warning("A venda foi salva apenas localmente no JSON (db.json).")
-
+        st.warning(f"Falha ao salvar a venda no Google Sheets: {e}")
+# ================= PARTE 2 =================
 def gsheets_delete_venda(cliente: str, produto: str, valor: float):
     if GSHEETS_CONECTADO:
         st.warning("⚠️ Exclusão/edição foi feita apenas localmente. No Google Sheets precisa remover manualmente.")
@@ -91,6 +87,7 @@ def gsheets_delete_venda(cliente: str, produto: str, valor: float):
 def gsheets_adicionar_cliente(nome: str):
     if not GSHEETS_CONECTADO:
         return
+    global gc
     try:
         planilha = gc.open(PLANILHA_NOME)
         aba = planilha.worksheet(ABA_CLIENTES)
@@ -119,21 +116,13 @@ def load_db():
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            prods = {}
-            for k, v in data.get("produtos", {}).items():
-                try:
-                    prods[int(k)] = v
-                except:
-                    prods[k] = v
+            prods = {int(k): v for k, v in data.get("produtos", {}).items()}
             clis = {k: v for k, v in data.get("clientes", {}).items()}
             return prods, clis
         except Exception:
             pass
-    # Clientes padrão começam com lista vazia
-    default_clients = {
-        "Tabata": [], "Valquiria": [], "Vanessa": [], 
-        "Pamela": [], "Elan": [], "Claudinha": []
-    }
+    # clientes padrão
+    default_clients = {"Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []}
     return {}, default_clients
 
 # ================== Session State inicial ==================
@@ -143,19 +132,16 @@ if "produtos" not in st.session_state or not st.session_state["produtos"]:
     prods_loaded, clients_loaded = load_db()
     st.session_state["produtos"] = prods_loaded or {}
     st.session_state["clientes"] = clients_loaded or {
-        "Tabata": [], "Valquiria": [], "Vanessa": [], 
-        "Pamela": [], "Elan": [], "Claudinha": []
+        "Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []
     }
 if "menu" not in st.session_state:
     st.session_state["menu"] = "Resumo 📊"
-if "recarregar" not in st.session_state:
-    st.session_state["recarregar"] = False
 
 # ================== Função: is_visitante ==================
 def is_visitante():
     u = st.session_state.get("usuario")
     return isinstance(u, str) and u.startswith("visitante-")
-# ================== Parte 2 ==================
+
 # ================== Login ==================
 def login():
     st.title("🔐 Login")
@@ -182,7 +168,7 @@ def login():
                     registrar_acesso(f"login-visitante:{nome.strip()}")
                     st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
                     st.experimental_rerun()
-
+# ================= PARTE 3 =================
 # ================== Tela de Resumo ==================
 def tela_resumo():
     st.header("📊 Resumo de Vendas")
@@ -204,6 +190,7 @@ def substituir_estoque_pdf(uploaded_file):
     data = uploaded_file.read()
     stream = io.BytesIO(data)
     novos_produtos = {}
+
     linha_regex = re.compile(r'^\s*(\d+)\s+(\d{5})\s+(.+?)\s+([\d.,]+)\s*$')
 
     try:
@@ -216,14 +203,24 @@ def substituir_estoque_pdf(uploaded_file):
                     m = linha_regex.match(linha.strip())
                     if m:
                         qtd_s, cod_s, nome, preco_s = m.groups()
-                        try: qtd = int(qtd_s)
-                        except: qtd = 0
-                        try: cod = int(cod_s)
-                        except: cod = None
-                        try: preco = float(preco_s.replace('.', '').replace(',', '.'))
-                        except: preco = 0.0
+                        try:
+                            qtd = int(qtd_s)
+                        except:
+                            qtd = 0
+                        try:
+                            cod = int(cod_s)
+                        except:
+                            cod = None
+                        try:
+                            preco = float(preco_s.replace('.', '').replace(',', '.'))
+                        except:
+                            preco = 0.0
                         if cod is not None:
-                            novos_produtos[cod] = {"nome": nome.title(), "preco": preco, "quantidade": qtd}
+                            novos_produtos[cod] = {
+                                "nome": nome.title(),
+                                "preco": preco,
+                                "quantidade": qtd
+                            }
     except Exception as e:
         st.error(f"Erro ao ler PDF: {e}")
         return
@@ -231,23 +228,21 @@ def substituir_estoque_pdf(uploaded_file):
     if not novos_produtos:
         st.error("Nenhum produto válido encontrado no PDF.")
         return
-
     st.session_state["produtos"] = novos_produtos
     save_db()
-    
-    # ✅ Salva automaticamente todos os produtos no Google Sheets
-    for cod, dados in novos_produtos.items():
-        gsheets_append_produto(cod, dados["nome"], dados["preco"], dados["quantidade"])
-    
-    st.success("✅ Estoque atualizado a partir do PDF e salvo no Google Sheets!")
+    st.success("✅ Estoque atualizado a partir do PDF!")
 
 # ================== Produtos ==================
 def adicionar_produto_manual(cod, nome, preco, qtd=10):
     cod = int(cod)
-    st.session_state["produtos"][cod] = {"nome": nome.strip(), "preco": float(preco), "quantidade": qtd}
+    st.session_state["produtos"][cod] = {
+        "nome": nome.strip(),
+        "preco": float(preco),
+        "quantidade": qtd
+    }
     save_db()
-    gsheets_append_produto(cod, nome.strip(), float(preco), qtd)
-    st.success(f"Produto {nome} adicionado/atualizado e salvo no Google Sheets!")
+    gsheets_append_venda("Sistema", nome, qtd, preco)  # salva no Google Sheets
+    st.success(f"Produto {nome} adicionado/atualizado!")
 
 def tela_produtos():
     st.header("📦 Produtos")
@@ -285,7 +280,7 @@ def tela_produtos():
         if pdf_file is not None:
             if st.button("Substituir estoque pelo PDF"):
                 substituir_estoque_pdf(pdf_file)
-# ================== Parte 3 ==================
+
 # ================== Clientes ==================
 def tela_clientes():
     st.header("👥 Clientes")
@@ -306,7 +301,7 @@ def tela_clientes():
                 st.session_state["clientes"][nome] = []
                 save_db()
                 gsheets_adicionar_cliente(nome)
-                st.success(f"Cliente {nome} adicionado e salvo no Google Sheets!")
+                st.success(f"Cliente {nome} adicionado!")
 
     elif acao == "Listar":
         st.subheader("Lista de Clientes")
@@ -333,7 +328,7 @@ def registrar_venda(cliente, codigo, quantidade):
     st.session_state["clientes"][cliente].append(venda)
     save_db()
     gsheets_append_venda(cliente, produtos[codigo]["nome"], quantidade, produtos[codigo]["preco"])
-    st.success("Venda registrada e salva no Google Sheets!")
+    st.success("Venda registrada!")
 
 def tela_vendas():
     st.header("🛒 Vendas")
@@ -345,21 +340,11 @@ def tela_vendas():
         return
 
     cliente = st.selectbox("Selecione o cliente", list(st.session_state["clientes"].keys()))
-    
-    # ✅ Autocomplete para código de produto
-    codigos_produtos = {str(k): v["nome"] for k, v in st.session_state["produtos"].items()}
-    codigo_str = st.text_input("Digite o código do produto", "")
-    produtos_filtrados = {k:v for k,v in codigos_produtos.items() if k.startswith(codigo_str)}
-    if produtos_filtrados:
-        st.write("Produtos encontrados:")
-        for k,v in produtos_filtrados.items():
-            st.write(f"{k} - {v}")
-
-    if codigo_str.isdigit():
-        codigo = int(codigo_str)
-        quantidade = st.number_input("Quantidade", min_value=1, step=1)
-        if st.button("Registrar venda"):
-            registrar_venda(cliente, codigo, quantidade)
+    codigos_disponiveis = list(st.session_state["produtos"].keys())
+    codigo = st.selectbox("Código do produto", codigos_disponiveis, format_func=lambda x: f"{x} - {st.session_state['produtos'][x]['nome']}")
+    quantidade = st.number_input("Quantidade", min_value=1, step=1)
+    if st.button("Registrar venda"):
+        registrar_venda(cliente, codigo, quantidade)
 
     st.subheader("📋 Histórico de Vendas")
     for cliente, vendas in st.session_state["clientes"].items():
@@ -380,12 +365,11 @@ def tela_relatorios():
             else:
                 st.write(f"Cliente: {cliente} — Total: R$ {total:.2f}")
 
-# ================== Menu no Topo ==================
+# ================== Menu Superior ==================
 def menu():
-    st.title("📌 Menu")
+    st.title("📌 Menu do Sistema")
     opcoes = ["Resumo", "Produtos", "Clientes", "Vendas", "Relatórios", "Sair"]
-    escolha = st.selectbox("Selecione a página:", opcoes, index=0)
-
+    escolha = st.selectbox("Selecione a seção", opcoes, index=0, key="menu_superior")
     if escolha == "Resumo":
         tela_resumo()
     elif escolha == "Produtos":
@@ -403,7 +387,7 @@ def menu():
 
 # ================== Main ==================
 def main():
-    if "usuario" not in st.session_state or st.session_state["usuario"] is None:
+    if "usuario" not in st.session_state or not st.session_state["usuario"]:
         login()
     else:
         st.sidebar.write(f"👤 Usuário: {st.session_state['usuario']}")
