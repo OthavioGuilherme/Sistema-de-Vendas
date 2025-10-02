@@ -140,7 +140,7 @@ def load_db():
             return prods, clis
         except Exception:
             pass
-    # CORREÇÃO CRÍTICA DO SYNTAX ERROR: Inicializando com listas vazias
+    # CORREÇÃO CRÍTICA DO SYNTAX ERROR
     default_clients = {
         "Tabata":, "Valquiria":, "Vanessa":, "Pamela":, "Elan":, "Claudinha":
     }
@@ -152,7 +152,7 @@ if "usuario" not in st.session_state:
 if "produtos" not in st.session_state or not st.session_state["produtos"]:
     prods_loaded, clients_loaded = load_db()
     st.session_state["produtos"] = prods_loaded or {}
-    # CORREÇÃO CRÍTICA DO SYNTAX ERROR: Inicializando com listas vazias
+    # CORREÇÃO CRÍTICA DO SYNTAX ERROR
     st.session_state["clientes"] = clients_loaded or {
         "Tabata":, "Valquiria":, "Vanessa":, "Pamela":, "Elan":, "Claudinha":
     }
@@ -273,7 +273,7 @@ def adicionar_produto_manual(cod, nome, preco, qtd=10):
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
-    # FIX 4: Corrigido o erro de lista faltando
+    # CORREÇÃO: Passando a lista de opções para st.radio
     acao = st.radio("Ação",, horizontal=True)
 
     if acao == "Adicionar":
@@ -325,8 +325,8 @@ def tela_clientes():
                 elif nome_limpo in st.session_state["clientes"]:
                     st.warning("Cliente já existe.")
                 else:
-                    # FIX 3: Inicializa com lista vazia
-                    st.session_state["clientes"][nome_limpo] =
+                    # CORREÇÃO: Inicializa com lista vazia
+                    st.session_state["clientes"][nome_limpo] = 
                     save_db()
                     gsheets_adicionar_cliente(nome_limpo) 
                     st.success(f"Cliente {nome_limpo} cadastrado!")
@@ -338,7 +338,7 @@ def tela_clientes():
     if not st.session_state["clientes"]:
         st.info("Nenhum cliente cadastrado.")
     for cliente in list(st.session_state["clientes"].keys()):
-        # FIX 5: Colunas ajustadas
+        # CORREÇÃO: Colunas ajustadas
         cols = st.columns() 
         cols.write(cliente)
         # botão visualizar vendas
@@ -394,7 +394,7 @@ def tela_vendas():
         quantidade = st.number_input("Quantidade", min_value=1, step=1, key="venda_qtd")
         if st.button("Adicionar venda", key="btn_adicionar_venda"):
             if produto_selecionado and produto_selecionado!= "":
-                # FIX 6: Corrigido o acesso ao índice  após o split
+                # CORREÇÃO: Acesso ao índice após o split
                 cod = int(produto_selecionado.split(" - ")) 
                 p = st.session_state["produtos"][cod]
                 if quantidade > p.get("quantidade", 0):
@@ -482,7 +482,7 @@ def tela_relatorios():
 
 # ================== NAVEGAÇÃO ==================
 def main_tabs():
-    # FIX 7: Tabs definidas e usadas corretamente
+    # CORREÇÃO: Tabs definidas e usadas corretamente
     tabs = st.tabs()
     with tabs: tela_resumo()
     with tabs: tela_clientes()
