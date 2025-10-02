@@ -8,15 +8,14 @@ ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"                         
 
 # =================================================================
-# NOVAS BIBLIOTERCAS PARA O GOOGLE SHEETS E JSON
+# BIBLIOTECAS
 # =================================================================
 import gspread
 from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
-import json 
-import streamlit as st 
-
-# ================== PARTE 1 ==================
+import streamlit as st
+from google.oauth2.service_account import Credentials
 from datetime import datetime
+import json
 import os
 import io
 import re
@@ -29,28 +28,31 @@ except Exception:
 
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# ================== Usuários (login) ==================
+# ================== Usuários ==================
 USERS = {"othavio": "122008", "isabela": "122008"}
 LOG_FILE = "acessos.log"
-DB_FILE = "db.json" 
+DB_FILE = "db.json"
 
-# ================== CONEXÃO GLOBAL COM GOOGLE SHEETS (USANDO SECRETS) ==================
+# ================== Conexão Google Sheets ==================
 GSHEETS_CONECTADO = False
-gc = None 
+gc = None
 
-try:
-    json_string = st.secrets.get("GCP_SA_CREDENTIALS") 
-    credentials_dict = json.loads(json_string) 
-    gc = gspread.service_account_from_dict(credentials_dict)
-    GSHEETS_CONECTADO = True
-    
-except KeyError:
-    st.error("❌ ERRO DE CONFIGURAÇÃO: O Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
-    st.info("O sistema está rodando, mas sem conexão com o Google Sheets.")
-    
-except Exception as e:
-    st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
-    st.info("Verifique se o JSON está colado corretamente e se a Conta de Serviço tem permissão de Editor na planilha.")
+def connect_gsheet():
+    global gc, GSHEETS_CONECTADO
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+        credentials = Credentials.from_service_account_info(dict(creds_dict), scopes=scopes)
+        gc = gspread.authorize(credentials)
+        GSHEETS_CONECTADO = True
+    except KeyError:
+        st.error("❌ Chave 'gcp_service_account' não encontrada nos Secrets")
+        st.info("Rodando apenas localmente.")
+    except Exception as e:
+        st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
+        st.info("Verifique o JSON e permissões da Conta de Serviço.")
+
+connect_gsheet()
 
 # ================== Registro de acesso ==================
 def registrar_acesso(usuario: str):
@@ -59,49 +61,6 @@ def registrar_acesso(usuario: str):
             f.write(f"{datetime.now().isoformat()} - {usuario}\n")
     except:
         pass
-
-# ================== FUNÇÕES DE INTERAÇÃO COM GOOGLE SHEETS ==================
-def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: float):
-    if not GSHEETS_CONECTADO:
-        return
-    global gc
-    try:
-        data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        planilha = gc.open(PLANILHA_NOME)
-        aba = planilha.worksheet(ABA_VENDAS)
-        nova_linha = [
-            data_registro, 
-            cliente, 
-            produto, 
-            quantidade, 
-            f"{preco:.2f}".replace('.',','), 
-            f"{(preco * quantidade):.2f}".replace('.',',')
-        ]
-        aba.append_row(nova_linha, value_input_option='USER_ENTERED')
-        st.toast("✅ Venda salva no Google Sheets!", icon='sheets')
-    except Exception as e:
-        st.error(f"Falha ao salvar a venda no Google Sheets: {e}")
-        st.warning("A venda foi salva apenas localmente no JSON (db.json).")
-
-def gsheets_delete_venda(cliente: str, produto: str, valor: float):
-    if GSHEETS_CONECTADO:
-        st.warning("⚠️ Exclusão/edição foi feita apenas localmente. No Google Sheets precisa remover manualmente.")
-
-def gsheets_adicionar_cliente(nome: str):
-    if not GSHEETS_CONECTADO:
-        return
-    global gc
-    try:
-        planilha = gc.open(PLANILHA_NOME)
-        aba = planilha.worksheet(ABA_CLIENTES)
-        aba.append_row([nome], value_input_option='USER_ENTERED')
-        st.toast("✅ Cliente salvo no Google Sheets!", icon='sheets')
-    except Exception as e:
-        st.warning(f"Falha ao salvar cliente no Google Sheets: {e}")
-
-def gsheets_deletar_cliente(nome: str):
-    if GSHEETS_CONECTADO:
-        st.warning(f"⚠️ Cliente '{nome}' removido do sistema local. Remova manualmente do Google Sheets.")
 
 # ================== Helpers: salvar/carregar DB local ==================
 def save_db():
@@ -119,44 +78,39 @@ def load_db():
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            prods = {}
-            for k, v in data.get("produtos", {}).items():
-                try:
-                    prods[int(k)] = v
-                except:
-                    prods[k] = v
+            prods = {int(k): v for k, v in data.get("produtos", {}).items()}
             clis = {k: v for k, v in data.get("clientes", {}).items()}
             return prods, clis
-        except Exception:
+        except:
             pass
-    # ✅ corrigido: clientes padrão começam com lista vazia
+    # clientes padrão começam com lista vazia
     default_clients = {
         "Tabata": [], "Valquiria": [], "Vanessa": [], 
         "Pamela": [], "Elan": [], "Claudinha": []
     }
     return {}, default_clients
 
-# ================== Session State inicial ==================
-if "usuario" not in st.session_state:
-    st.session_state["usuario"] = None
-if "produtos" not in st.session_state or not st.session_state["produtos"]:
-    prods_loaded, clients_loaded = load_db()
-    st.session_state["produtos"] = prods_loaded or {}
-    st.session_state["clientes"] = clients_loaded or {
-        "Tabata": [], "Valquiria": [], "Vanessa": [], 
-        "Pamela": [], "Elan": [], "Claudinha": []
-    }
-if "menu" not in st.session_state:
-    st.session_state["menu"] = "Resumo 📊"
-if "recarregar" not in st.session_state:
-    st.session_state["recarregar"] = False
+# ================== Inicialização session state ==================
+def init_db():
+    if "usuario" not in st.session_state:
+        st.session_state["usuario"] = None
+    if "produtos" not in st.session_state or not st.session_state["produtos"]:
+        prods_loaded, clients_loaded = load_db()
+        st.session_state["produtos"] = prods_loaded or {}
+        st.session_state["clientes"] = clients_loaded or {
+            "Tabata": [], "Valquiria": [], "Vanessa": [], 
+            "Pamela": [], "Elan": [], "Claudinha": []
+        }
+    if "menu" not in st.session_state:
+        st.session_state["menu"] = "Resumo 📊"
+    if "recarregar" not in st.session_state:
+        st.session_state["recarregar"] = False
 
 # ================== Função: is_visitante ==================
 def is_visitante():
     u = st.session_state.get("usuario")
     return isinstance(u, str) and u.startswith("visitante-")
-# ================== Parte 2 ================
-# ================== PARTE 2 ==================
+# ================== Parte 2 ==================
 # ================== Login ==================
 def login():
     st.title("🔐 Login")
@@ -261,8 +215,6 @@ def adicionar_produto_manual(cod, nome, preco, qtd=10):
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
-
-    # ✅ corrigido: passando as opções corretamente
     acao = st.radio("Ação", ["Adicionar", "Listar/Buscar", "Importar PDF"], horizontal=True)
 
     if acao == "Adicionar":
@@ -296,7 +248,7 @@ def tela_produtos():
         if pdf_file is not None:
             if st.button("Substituir estoque pelo PDF"):
                 substituir_estoque_pdf(pdf_file)
-# ================== PARTE 3 ==================
+# ================== Parte 3 ==================
 # ================== Clientes ==================
 def tela_clientes():
     st.header("👥 Clientes")
@@ -400,7 +352,7 @@ def menu():
 # ================== Main ==================
 def main():
     init_db()
-    if "usuario" not in st.session_state:
+    if not st.session_state.get("usuario"):
         login()
     else:
         st.sidebar.write(f"👤 Usuário: {st.session_state['usuario']}")
