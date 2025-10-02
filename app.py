@@ -39,7 +39,7 @@ gc = None
 
 try:
     # 1. Tenta ler o conteúdo JSON da chave 'GCP_SA_CREDENTIALS' salva no Streamlit Secrets
-    json_string = st.secrets # Acessa a chave exata
+    json_string = st.secrets.get("GCP_SA_CREDENTIALS") 
     
     # 2. Converte a string JSON em um dicionário Python
     credentials_dict = json.loads(json_string) 
@@ -140,7 +140,7 @@ def load_db():
             return prods, clis
         except Exception:
             pass
-    # FIX 1: Corrigido o SyntaxError aqui
+    # FIX 1: Corrigido o SyntaxError
     default_clients = {
         "Tabata":, "Valquiria":, "Vanessa":, "Pamela":, "Elan":, "Claudinha":
     }
@@ -152,7 +152,7 @@ if "usuario" not in st.session_state:
 if "produtos" not in st.session_state or not st.session_state["produtos"]:
     prods_loaded, clients_loaded = load_db()
     st.session_state["produtos"] = prods_loaded or {}
-    # FIX 2: Corrigido o SyntaxError aqui
+    # FIX 2: Corrigido o SyntaxError
     st.session_state["clientes"] = clients_loaded or {
         "Tabata":, "Valquiria":, "Vanessa":, "Pamela":, "Elan":, "Claudinha":
     }
@@ -394,7 +394,7 @@ def tela_vendas():
         quantidade = st.number_input("Quantidade", min_value=1, step=1, key="venda_qtd")
         if st.button("Adicionar venda", key="btn_adicionar_venda"):
             if produto_selecionado and produto_selecionado!= "":
-                # FIX 6: Corrigido o acesso ao índice  após o split
+                # FIX 6: Corrigido o acesso ao índice
                 cod = int(produto_selecionado.split(" - ")) 
                 p = st.session_state["produtos"][cod]
                 if quantidade > p.get("quantidade", 0):
