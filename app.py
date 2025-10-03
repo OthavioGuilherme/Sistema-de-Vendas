@@ -6,16 +6,14 @@ ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"
 
 # BIBLIOTECAS
+import gspread
+from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
+import json
 import streamlit as st
-import pandas as pd
 from datetime import datetime
 import os
 import io
 import re
-import gspread
-from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
-from google.oauth2 import service_account
-import json
 
 try:
     import pdfplumber
@@ -24,30 +22,35 @@ except Exception:
 
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# ================= USUÁRIOS =================
+# ================== Usuários ==================
 USERS = {"othavio": "122008", "isabela": "122008"}
 LOG_FILE = "acessos.log"
 DB_FILE = "db.json"
 
-# ================= CONEXÃO COM GOOGLE SHEETS =================
+# ================== Conexão com Google Sheets ==================
 GSHEETS_CONECTADO = False
 gc = None
-spreadsheet = None
+
+from google.oauth2 import service_account
 
 try:
-    creds = service_account.Credentials.from_service_account_info(
-        st.secrets["GCP_SA_CREDENTIALS"]
-    )
+    credentials_dict = st.secrets["GCP_SA_CREDENTIALS"]
+    SCOPES = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = service_account.Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    spreadsheet = gc.open(PLANILHA_NOME)
     GSHEETS_CONECTADO = True
+
 except KeyError:
     st.error("❌ ERRO DE CONFIGURAÇÃO: Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
     st.info("Rodando sem conexão com o Google Sheets.")
+
 except Exception as e:
     st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
 
-# ================= FUNÇÕES AUXILIARES =================
+# ================== Registro de acesso ==================
 def registrar_acesso(usuario: str):
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -55,12 +58,13 @@ def registrar_acesso(usuario: str):
     except:
         pass
 
-# ================= FUNÇÕES GOOGLE SHEETS =================
+# ================== Funções Google Sheets ==================
 def gsheets_append_produto(cod: int, nome: str, preco: float, quantidade: int):
     if not GSHEETS_CONECTADO:
         return
     try:
-        aba = spreadsheet.worksheet(ABA_PRODUTOS)
+        planilha = gc.open(PLANILHA_NOME)
+        aba = planilha.worksheet(ABA_PRODUTOS)
         nova_linha = [cod, nome, f"{preco:.2f}".replace('.',','), quantidade]
         aba.append_row(nova_linha, value_input_option='USER_ENTERED')
     except Exception as e:
@@ -71,7 +75,8 @@ def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: flo
         return
     try:
         data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        aba = spreadsheet.worksheet(ABA_VENDAS)
+        planilha = gc.open(PLANILHA_NOME)
+        aba = planilha.worksheet(ABA_VENDAS)
         nova_linha = [
             data_registro,
             cliente,
@@ -88,12 +93,13 @@ def gsheets_adicionar_cliente(nome: str):
     if not GSHEETS_CONECTADO:
         return
     try:
-        aba = spreadsheet.worksheet(ABA_CLIENTES)
+        planilha = gc.open(PLANILHA_NOME)
+        aba = planilha.worksheet(ABA_CLIENTES)
         aba.append_row([nome], value_input_option='USER_ENTERED')
     except Exception as e:
         st.warning(f"Falha ao salvar cliente no Google Sheets: {e}")
 
-# ================= HELPERS DB LOCAL =================
+# ================== Helpers local DB ==================
 def save_db():
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -117,7 +123,6 @@ def load_db():
     default_clients = {"Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []}
     return {}, default_clients
 
-# ================= SESSION STATE =================
 if "usuario" not in st.session_state:
     st.session_state["usuario"] = None
 if "produtos" not in st.session_state:
@@ -129,7 +134,38 @@ def is_visitante():
     u = st.session_state.get("usuario")
     return isinstance(u, str) and u.startswith("visitante-")
 
-# ================= LOGIN =================
+# ================== Sincronização inicial ==================
+def sincronizar_tudo_gsheets():
+    if not GSHEETS_CONECTADO:
+        st.warning("❌ Google Sheets não conectado. Nenhum dado será enviado.")
+        return
+    
+    # Clientes
+    for cliente in st.session_state["clientes"].keys():
+        try:
+            gsheets_adicionar_cliente(cliente)
+        except:
+            pass
+    
+    # Produtos
+    for cod, dados in st.session_state["produtos"].items():
+        try:
+            gsheets_append_produto(cod, dados["nome"], dados["preco"], dados.get("quantidade", 0))
+        except:
+            pass
+    
+    # Vendas
+    for cliente, vendas in st.session_state["clientes"].items():
+        for v in vendas:
+            try:
+                gsheets_append_venda(cliente, v["nome"], v["quantidade"], v["preco"])
+            except:
+                pass
+    
+    st.success("✅ Todos os dados existentes foram enviados para o Google Sheets!")
+# ================= PARTE 2 =================
+# ================== Parte 2 ==================
+# ================== Login ==================
 def login():
     st.title("🔐 Login")
     escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
@@ -139,21 +175,24 @@ def login():
             usuario_input = st.text_input("Usuário")
             senha = st.text_input("Senha", type="password")
             if st.form_submit_button("Entrar"):
-                usuario = usuario_input.lower()
-                if usuario in {u.lower(): s for u,s in USERS.items()} and USERS[usuario] == senha:
-                    st.session_state["usuario"] = usuario_input
-                    registrar_acesso(f"login-usuario:{usuario_input}")
+                usuario = usuario_input.lower().strip()  # aceita maiúscula/minúscula
+                if usuario in USERS and USERS[usuario] == senha:
+                    st.session_state["usuario"] = usuario
+                    registrar_acesso(f"login-usuario:{usuario}")
                     st.success(f"Bem-vindo(a), {usuario_input}!")
 
-                    # NOTIFICAÇÃO Google Sheets para usuário
+                    # ✅ Mostra notificação de Google Sheets conectado
                     if GSHEETS_CONECTADO:
-                        st.info("✅ Google Sheets ativo: suas vendas serão salvas permanentemente!")
+                        st.info("Google Sheets conectado ✅")
+                        if st.button("Sincronizar todos os dados existentes"):
+                            sincronizar_tudo_gsheets()
 
-                    st.experimental_rerun()
+                    st.rerun()
+
                 else:
                     st.error("Usuário ou senha incorretos.")
 
-    else:
+    else:  # Visitante
         with st.form("form_visitante"):
             nome = st.text_input("Digite seu nome")
             if st.form_submit_button("Entrar como visitante"):
@@ -161,9 +200,7 @@ def login():
                     st.session_state["usuario"] = f"visitante-{nome.strip()}"
                     registrar_acesso(f"login-visitante:{nome.strip()}")
                     st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
-                    st.experimental_rerun()
-# ================= PARTE 2 =================
-
+                    st.rerun()
 # ================== Produtos ==================
 def adicionar_produto_manual(cod, nome, preco, qtd=10):
     cod = int(cod)
