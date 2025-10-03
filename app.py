@@ -115,31 +115,40 @@ def is_visitante():
     return isinstance(u, str) and u.startswith("visitante-")
 
 # ================== Login ==================
+# ================== Login ==================
 def login():
     st.title("🔐 Login")
     escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
 
     if escolha == "Usuário cadastrado":
         with st.form("form_login"):
-            usuario = st.text_input("Usuário")
-            senha = st.text_input("Senha", type="password")
+            usuario = st.text_input("Usuário").strip()
+            senha = st.text_input("Senha", type="password").strip()
+            
             if st.form_submit_button("Entrar"):
-                if usuario in USERS and USERS[usuario] == senha:
-                    st.session_state["usuario"] = usuario
+                usuario_lower = usuario.lower()
+                # Comparar independente de maiúscula/minúscula
+                usuarios_normalizados = {k.lower(): v for k, v in USERS.items()}
+                
+                if usuario_lower in usuarios_normalizados and usuarios_normalizados[usuario_lower] == senha:
+                    st.session_state["usuario"] = usuario  # mantém como digitado
                     registrar_acesso(f"login-usuario:{usuario}")
                     st.success(f"Bem-vindo(a), {usuario}!")
                     st.experimental_rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
-    else:
+
+    else:  # visitante
         with st.form("form_visitante"):
-            nome = st.text_input("Digite seu nome")
+            nome = st.text_input("Digite seu nome").strip()
             if st.form_submit_button("Entrar como visitante"):
-                if nome.strip():
-                    st.session_state["usuario"] = f"visitante-{nome.strip()}"
-                    registrar_acesso(f"login-visitante:{nome.strip()}")
-                    st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
+                if nome:
+                    st.session_state["usuario"] = f"visitante-{nome}"
+                    registrar_acesso(f"login-visitante:{nome}")
+                    st.success(f"Bem-vindo(a), visitante {nome}!")
                     st.experimental_rerun()
+                else:
+                    st.warning("Digite um nome válido.")
 
 # ================== Resumo de Vendas ==================
 def tela_resumo():
