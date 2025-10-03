@@ -1,6 +1,6 @@
 # ================= PARTE 1 =================
 # CONFIGURAÇÕES DA PLANILHA
-PLANILHA_NOME = "Sistema de vendas"
+PLANILHA_ID = "0a13b6def8abf73639c72473638e93d92ddaeec2"  # <-- ID da sua planilha Google
 ABA_VENDAS = "Vendas"
 ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"
@@ -63,7 +63,7 @@ def gsheets_append_produto(cod: int, nome: str, preco: float, quantidade: int):
     if not GSHEETS_CONECTADO:
         return
     try:
-        planilha = gc.open(PLANILHA_NOME)
+        planilha = gc.open_by_key(PLANILHA_ID)
         aba = planilha.worksheet(ABA_PRODUTOS)
         nova_linha = [cod, nome, f"{preco:.2f}".replace('.',','), quantidade]
         aba.append_row(nova_linha, value_input_option='USER_ENTERED')
@@ -75,7 +75,7 @@ def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: flo
         return
     try:
         data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        planilha = gc.open(PLANILHA_NOME)
+        planilha = gc.open_by_key(PLANILHA_ID)
         aba = planilha.worksheet(ABA_VENDAS)
         nova_linha = [
             data_registro,
@@ -93,7 +93,7 @@ def gsheets_adicionar_cliente(nome: str):
     if not GSHEETS_CONECTADO:
         return
     try:
-        planilha = gc.open(PLANILHA_NOME)
+        planilha = gc.open_by_key(PLANILHA_ID)
         aba = planilha.worksheet(ABA_CLIENTES)
         aba.append_row([nome], value_input_option='USER_ENTERED')
     except Exception as e:
