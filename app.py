@@ -1,37 +1,45 @@
-# ================== Parte 1 ==================
-# ================== Configurações e Bibliotecas ==================
-import gspread
-from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
-import streamlit as st
-from datetime import datetime
-import os
-import io
-import re
-import json
-
-try:
-    import pdfplumber
-except:
-    pdfplumber = None
-
-st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
-
-# ================== Configurações da Planilha ==================
+# ================= PARTE 1 =================
+# CONFIGURAÇÕES DA PLANILHA
 PLANILHA_NOME = "Sistema de vendas"
 ABA_VENDAS = "Vendas"
 ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"
 
+# BIBLIOTECAS
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+import os
+import io
+import re
+import gspread
+from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
+from google.oauth2 import service_account
+import json
+
+try:
+    import pdfplumber
+except Exception:
+    pdfplumber = None
+
+st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
+
+# ================= USUÁRIOS =================
 USERS = {"othavio": "122008", "isabela": "122008"}
 LOG_FILE = "acessos.log"
 DB_FILE = "db.json"
 
-# ================== Conexão com Google Sheets ==================
+# ================= CONEXÃO COM GOOGLE SHEETS =================
 GSHEETS_CONECTADO = False
 gc = None
+spreadsheet = None
+
 try:
-    credentials_dict = st.secrets["GCP_SA_CREDENTIALS"]  # já vem como dict
-    gc = gspread.service_account_from_dict(credentials_dict)
+    creds = service_account.Credentials.from_service_account_info(
+        st.secrets["GCP_SA_CREDENTIALS"]
+    )
+    gc = gspread.authorize(creds)
+    spreadsheet = gc.open(PLANILHA_NOME)
     GSHEETS_CONECTADO = True
 except KeyError:
     st.error("❌ ERRO DE CONFIGURAÇÃO: Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
@@ -39,7 +47,7 @@ except KeyError:
 except Exception as e:
     st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
 
-# ================== Registro de Acesso ==================
+# ================= FUNÇÕES AUXILIARES =================
 def registrar_acesso(usuario: str):
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -47,14 +55,14 @@ def registrar_acesso(usuario: str):
     except:
         pass
 
-# ================== Funções Google Sheets ==================
+# ================= FUNÇÕES GOOGLE SHEETS =================
 def gsheets_append_produto(cod: int, nome: str, preco: float, quantidade: int):
     if not GSHEETS_CONECTADO:
         return
     try:
-        planilha = gc.open(PLANILHA_NOME)
-        aba = planilha.worksheet(ABA_PRODUTOS)
-        aba.append_row([cod, nome, f"{preco:.2f}".replace('.',','), quantidade], value_input_option='USER_ENTERED')
+        aba = spreadsheet.worksheet(ABA_PRODUTOS)
+        nova_linha = [cod, nome, f"{preco:.2f}".replace('.',','), quantidade]
+        aba.append_row(nova_linha, value_input_option='USER_ENTERED')
     except Exception as e:
         st.warning(f"Falha ao salvar produto no Google Sheets: {e}")
 
@@ -63,9 +71,16 @@ def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: flo
         return
     try:
         data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        planilha = gc.open(PLANILHA_NOME)
-        aba = planilha.worksheet(ABA_VENDAS)
-        aba.append_row([data_registro, cliente, produto, quantidade, f"{preco:.2f}".replace('.',','), f"{(preco*quantidade):.2f}".replace('.',',')], value_input_option='USER_ENTERED')
+        aba = spreadsheet.worksheet(ABA_VENDAS)
+        nova_linha = [
+            data_registro,
+            cliente,
+            produto,
+            quantidade,
+            f"{preco:.2f}".replace('.',','),
+            f"{(preco * quantidade):.2f}".replace('.',',')
+        ]
+        aba.append_row(nova_linha, value_input_option='USER_ENTERED')
     except Exception as e:
         st.warning(f"Falha ao salvar venda no Google Sheets: {e}")
 
@@ -73,13 +88,12 @@ def gsheets_adicionar_cliente(nome: str):
     if not GSHEETS_CONECTADO:
         return
     try:
-        planilha = gc.open(PLANILHA_NOME)
-        aba = planilha.worksheet(ABA_CLIENTES)
+        aba = spreadsheet.worksheet(ABA_CLIENTES)
         aba.append_row([nome], value_input_option='USER_ENTERED')
     except Exception as e:
         st.warning(f"Falha ao salvar cliente no Google Sheets: {e}")
 
-# ================== DB Local ==================
+# ================= HELPERS DB LOCAL =================
 def save_db():
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -103,6 +117,7 @@ def load_db():
     default_clients = {"Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []}
     return {}, default_clients
 
+# ================= SESSION STATE =================
 if "usuario" not in st.session_state:
     st.session_state["usuario"] = None
 if "produtos" not in st.session_state:
@@ -114,60 +129,47 @@ def is_visitante():
     u = st.session_state.get("usuario")
     return isinstance(u, str) and u.startswith("visitante-")
 
-# ================== Login ==================
-# ================== Login seguro ==================
-# ================== Login seguro (substituir a função antiga) ==================
+# ================= LOGIN =================
 def login():
     st.title("🔐 Login")
     escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
 
     if escolha == "Usuário cadastrado":
         with st.form("form_login"):
-            usuario = st.text_input("Usuário").strip()
-            senha = st.text_input("Senha", type="password").strip()
+            usuario_input = st.text_input("Usuário")
+            senha = st.text_input("Senha", type="password")
             if st.form_submit_button("Entrar"):
-                usuario_lower = usuario.lower()
-                usuarios_normalizados = {k.lower(): v for k, v in USERS.items()}
-                if usuario_lower in usuarios_normalizados and usuarios_normalizados[usuario_lower] == senha:
-                    st.session_state["usuario"] = usuario  # mantém como digitado
-                    registrar_acesso(usuario)
-                    st.success(f"Bem-vindo(a), {usuario}!")
+                usuario = usuario_input.lower()
+                if usuario in {u.lower(): s for u,s in USERS.items()} and USERS[usuario] == senha:
+                    st.session_state["usuario"] = usuario_input
+                    registrar_acesso(f"login-usuario:{usuario_input}")
+                    st.success(f"Bem-vindo(a), {usuario_input}!")
+
+                    # NOTIFICAÇÃO Google Sheets para usuário
+                    if GSHEETS_CONECTADO:
+                        st.info("✅ Google Sheets ativo: suas vendas serão salvas permanentemente!")
+
+                    st.experimental_rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
 
-    else:  # visitante
-        with st.form("form_visitante"):
-            nome = st.text_input("Digite seu nome").strip()
-            if st.form_submit_button("Entrar como visitante"):
-                if nome:
-                    st.session_state["usuario"] = f"visitante-{nome}"
-                    registrar_acesso(f"visitante-{nome}")
-                    st.success(f"Bem-vindo(a), visitante {nome}!")
-                else:
-                    st.warning("Digite um nome válido.")
-
-# ================== Resumo de Vendas ==================
-def tela_resumo():
-    st.header("📊 Resumo de Vendas")
-    visitante = is_visitante()
-    total_geral = 0.0
-    for cliente, vendas in st.session_state["clientes"].items():
-        total_cliente = sum((v.get("preco",0.0)*v.get("quantidade",0)) for v in vendas)
-        total_geral += total_cliente
-    comissao = total_geral * 0.25
-    if visitante:
-        st.metric("💰 Total Geral de Vendas", "R$ *****")
-        st.metric("🧾 Comissão (25%)", "R$ *****")
     else:
-        st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
-        st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
+        with st.form("form_visitante"):
+            nome = st.text_input("Digite seu nome")
+            if st.form_submit_button("Entrar como visitante"):
+                if nome.strip():
+                    st.session_state["usuario"] = f"visitante-{nome.strip()}"
+                    registrar_acesso(f"login-visitante:{nome.strip()}")
+                    st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
+                    st.experimental_rerun()
+# ================= PARTE 2 =================
 
 # ================== Produtos ==================
-def adicionar_produto_manual(cod,nome,preco,qtd=10):
+def adicionar_produto_manual(cod, nome, preco, qtd=10):
     cod = int(cod)
-    st.session_state["produtos"][cod] = {"nome":nome.strip(),"preco":float(preco),"quantidade":qtd}
+    st.session_state["produtos"][cod] = {"nome": nome.strip(), "preco": float(preco), "quantidade": qtd}
     save_db()
-    gsheets_append_produto(cod,nome.strip(),float(preco),qtd)
+    gsheets_append_produto(cod, nome.strip(), float(preco), qtd)
     st.success(f"Produto {nome} adicionado/atualizado e salvo no Google Sheets!")
 
 def substituir_estoque_pdf(uploaded_file):
@@ -175,61 +177,79 @@ def substituir_estoque_pdf(uploaded_file):
     stream = io.BytesIO(data)
     novos_produtos = {}
     linha_regex = re.compile(r'^\s*(\d+)\s+(\d{5})\s+(.+?)\s+([\d.,]+)\s*$')
+
     try:
         with pdfplumber.open(stream) as pdf:
             for page in pdf.pages:
                 text = page.extract_text()
-                if not text: continue
+                if not text:
+                    continue
                 for linha in text.splitlines():
                     m = linha_regex.match(linha.strip())
                     if m:
                         qtd_s, cod_s, nome, preco_s = m.groups()
-                        try: qtd=int(qtd_s)
-                        except: qtd=0
-                        try: cod=int(cod_s)
-                        except: cod=None
-                        try: preco=float(preco_s.replace('.', '').replace(',', '.'))
-                        except: preco=0.0
+                        try: qtd = int(qtd_s)
+                        except: qtd = 0
+                        try: cod = int(cod_s)
+                        except: cod = None
+                        try: preco = float(preco_s.replace('.', '').replace(',', '.'))
+                        except: preco = 0.0
                         if cod is not None:
-                            novos_produtos[cod]={"nome":nome.title(),"preco":preco,"quantidade":qtd}
+                            novos_produtos[cod] = {"nome": nome.title(), "preco": preco, "quantidade": qtd}
     except Exception as e:
         st.error(f"Erro ao ler PDF: {e}")
         return
+
     if not novos_produtos:
         st.error("Nenhum produto válido encontrado no PDF.")
         return
+
     st.session_state["produtos"] = novos_produtos
     save_db()
-    for cod,dados in novos_produtos.items():
-        gsheets_append_produto(cod,dados["nome"],dados["preco"],dados["quantidade"])
+    
+    # Salva todos os produtos no Google Sheets
+    for cod, dados in novos_produtos.items():
+        gsheets_append_produto(cod, dados["nome"], dados["preco"], dados["quantidade"])
+    
     st.success("✅ Estoque atualizado a partir do PDF e salvo no Google Sheets!")
 
 def tela_produtos():
     st.header("📦 Produtos")
     visitante = is_visitante()
-    acao = st.radio("Ação", ["Adicionar","Listar/Buscar","Importar PDF"], horizontal=True)
-    if acao=="Adicionar":
-        if visitante: st.info("🔒 Visitantes não podem adicionar produtos."); return
+    acao = st.radio("Ação", ["Adicionar", "Listar/Buscar", "Importar PDF"], horizontal=True)
+
+    if acao == "Adicionar":
+        if visitante:
+            st.info("🔒 Visitantes não podem adicionar produtos.")
+            return
         cod = st.number_input("Código", min_value=1, step=1)
         nome = st.text_input("Nome do produto")
         preco = st.number_input("Preço", min_value=0.0, step=0.10, format="%.2f")
         quantidade = st.number_input("Quantidade inicial", min_value=0, step=1)
         if st.button("Salvar produto"):
-            if cod in st.session_state["produtos"]: st.warning("Código já existe.")
-            elif not nome.strip(): st.warning("Informe um nome válido.")
-            else: adicionar_produto_manual(cod,nome,preco,quantidade)
-    elif acao=="Listar/Buscar":
+            if cod in st.session_state["produtos"]:
+                st.warning("Código já existe.")
+            elif not nome.strip():
+                st.warning("Informe um nome válido.")
+            else:
+                adicionar_produto_manual(cod, nome, preco, quantidade)
+
+    elif acao == "Listar/Buscar":
         termo = st.text_input("Buscar por nome ou código").lower()
         st.subheader("Lista de Produtos")
-        for cod,dados in sorted(st.session_state["produtos"].items(), key=lambda x:str(x[0])):
-            if termo in str(cod) or termo in dados["nome"].lower() or termo=="":
-                st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f}) | Estoque: {dados.get('quantidade',0)}")
-    elif acao=="Importar PDF":
-        if visitante: st.info("🔒 Visitantes não podem importar PDF."); return
+        for cod, dados in sorted(st.session_state["produtos"].items(), key=lambda x: str(x)):
+            if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
+                st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f}) | Estoque: {dados.get('quantidade', 0)}")
+
+    elif acao == "Importar PDF":
+        if visitante:
+            st.info("🔒 Visitantes não podem importar PDF.")
+            return
         pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
-        if pdf_file is not None and st.button("Substituir estoque pelo PDF"):
-            substituir_estoque_pdf(pdf_file)
-# ================== Parte 2 ==================
+        if pdf_file is not None:
+            if st.button("Substituir estoque pelo PDF"):
+                substituir_estoque_pdf(pdf_file)
+
 # ================== Clientes ==================
 def tela_clientes():
     st.header("👥 Clientes")
@@ -290,7 +310,7 @@ def tela_vendas():
 
     cliente = st.selectbox("Selecione o cliente", list(st.session_state["clientes"].keys()))
     
-    # ✅ Autocomplete para código de produto
+    # Autocomplete para código de produto
     codigos_produtos = {str(k): v["nome"] for k, v in st.session_state["produtos"].items()}
     codigo_str = st.text_input("Digite o código do produto", "")
     produtos_filtrados = {k:v for k,v in codigos_produtos.items() if k.startswith(codigo_str)}
@@ -323,8 +343,9 @@ def tela_relatorios():
                 st.write(f"Cliente: {cliente} — Total: R$ *****")
             else:
                 st.write(f"Cliente: {cliente} — Total: R$ {total:.2f}")
+# ================= PARTE 3 =================
 
-# ================== Menu ==================
+# ================== Menu no Topo ==================
 def menu():
     st.title("📌 Menu")
     opcoes = ["Resumo", "Produtos", "Clientes", "Vendas", "Relatórios", "Sair"]
@@ -344,6 +365,22 @@ def menu():
         if st.button("Confirmar saída"):
             st.session_state.clear()
             st.experimental_rerun()
+
+# ================== Tela de Resumo ==================
+def tela_resumo():
+    st.header("📊 Resumo de Vendas")
+    visitante = is_visitante()
+    total_geral = 0.0
+    for cliente, vendas in st.session_state["clientes"].items():
+        total_cliente = sum((v.get("preco", 0.0) * v.get("quantidade", 0)) for v in vendas)
+        total_geral += total_cliente
+    comissao = total_geral * 0.25
+    if visitante:
+        st.metric("💰 Total Geral de Vendas", "R$ *****")
+        st.metric("🧾 Comissão (25%)", "R$ *****")
+    else:
+        st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
+        st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
 
 # ================== Main ==================
 def main():
