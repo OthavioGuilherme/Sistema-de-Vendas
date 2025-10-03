@@ -164,43 +164,40 @@ def sincronizar_tudo_gsheets():
     
     st.success("✅ Todos os dados existentes foram enviados para o Google Sheets!")
 # ================= PARTE 2 =================
-# ================== Parte 2 ==================
 # ================== Login ==================
 def login():
     st.title("🔐 Login")
     escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
 
     if escolha == "Usuário cadastrado":
-        with st.form("form_login"):
-            usuario_input = st.text_input("Usuário")
-            senha = st.text_input("Senha", type="password")
-            if st.form_submit_button("Entrar"):
-                usuario = usuario_input.lower().strip()  # aceita maiúscula/minúscula
-                if usuario in USERS and USERS[usuario] == senha:
-                    st.session_state["usuario"] = usuario
-                    registrar_acesso(f"login-usuario:{usuario}")
-                    st.success(f"Bem-vindo(a), {usuario_input}!")
+        usuario_input = st.text_input("Usuário")
+        senha = st.text_input("Senha", type="password")
+        if st.button("Entrar"):
+            usuario = usuario_input.lower().strip()  # aceita maiúscula/minúscula
+            if usuario in USERS and USERS[usuario] == senha:
+                st.session_state["usuario"] = usuario
+                registrar_acesso(f"login-usuario:{usuario}")
+                st.success(f"Bem-vindo(a), {usuario_input}!")
 
-                    # ✅ Mostra notificação de Google Sheets conectado
-                    if GSHEETS_CONECTADO:
-                        st.info("Google Sheets conectado ✅")
-                        if st.button("Sincronizar todos os dados existentes"):
-                            sincronizar_tudo_gsheets()
+                # Notificação de Google Sheets conectado
+                if GSHEETS_CONECTADO:
+                    st.info("Google Sheets conectado ✅")
+                    if st.button("Sincronizar todos os dados existentes"):
+                        sincronizar_tudo_gsheets()
 
-                    st.rerun()
-
-                else:
-                    st.error("Usuário ou senha incorretos.")
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
 
     else:  # Visitante
-        with st.form("form_visitante"):
-            nome = st.text_input("Digite seu nome")
-            if st.form_submit_button("Entrar como visitante"):
-                if nome.strip():
-                    st.session_state["usuario"] = f"visitante-{nome.strip()}"
-                    registrar_acesso(f"login-visitante:{nome.strip()}")
-                    st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
-                    st.rerun()
+        nome = st.text_input("Digite seu nome")
+        if st.button("Entrar como visitante"):
+            if nome.strip():
+                st.session_state["usuario"] = f"visitante-{nome.strip()}"
+                registrar_acesso(f"login-visitante:{nome.strip()}")
+                st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
+                st.rerun()
+
 # ================== Produtos ==================
 def adicionar_produto_manual(cod, nome, preco, qtd=10):
     cod = int(cod)
@@ -244,7 +241,6 @@ def substituir_estoque_pdf(uploaded_file):
     st.session_state["produtos"] = novos_produtos
     save_db()
     
-    # Salva todos os produtos no Google Sheets
     for cod, dados in novos_produtos.items():
         gsheets_append_produto(cod, dados["nome"], dados["preco"], dados["quantidade"])
     
@@ -308,12 +304,11 @@ def tela_clientes():
                 save_db()
                 gsheets_adicionar_cliente(nome)
                 st.success(f"Cliente {nome} adicionado e salvo no Google Sheets!")
-
     elif acao == "Listar":
         st.subheader("Lista de Clientes")
         for cliente in sorted(st.session_state["clientes"].keys()):
             st.write(cliente)
-
+# ================= PARTE 3 =================
 # ================== Vendas ==================
 def registrar_venda(cliente, codigo, quantidade):
     produtos = st.session_state["produtos"]
@@ -346,14 +341,14 @@ def tela_vendas():
         return
 
     cliente = st.selectbox("Selecione o cliente", list(st.session_state["clientes"].keys()))
-    
+
     # Autocomplete para código de produto
     codigos_produtos = {str(k): v["nome"] for k, v in st.session_state["produtos"].items()}
     codigo_str = st.text_input("Digite o código do produto", "")
-    produtos_filtrados = {k:v for k,v in codigos_produtos.items() if k.startswith(codigo_str)}
-    if produtos_filtrados:
-        st.write("Produtos encontrados:")
-        for k,v in produtos_filtrados.items():
+    produtos_filtrados = {k: v for k, v in codigos_produtos.items() if k.startswith(codigo_str)}
+    if produtos_filtrados and codigo_str:
+        st.write("Sugestões de produtos:")
+        for k, v in produtos_filtrados.items():
             st.write(f"{k} - {v}")
 
     if codigo_str.isdigit():
@@ -380,30 +375,8 @@ def tela_relatorios():
                 st.write(f"Cliente: {cliente} — Total: R$ *****")
             else:
                 st.write(f"Cliente: {cliente} — Total: R$ {total:.2f}")
-# ================= PARTE 3 =================
 
-# ================== Menu no Topo ==================
-def menu():
-    st.title("📌 Menu")
-    opcoes = ["Resumo", "Produtos", "Clientes", "Vendas", "Relatórios", "Sair"]
-    escolha = st.selectbox("Selecione a página:", opcoes, index=0)
-
-    if escolha == "Resumo":
-        tela_resumo()
-    elif escolha == "Produtos":
-        tela_produtos()
-    elif escolha == "Clientes":
-        tela_clientes()
-    elif escolha == "Vendas":
-        tela_vendas()
-    elif escolha == "Relatórios":
-        tela_relatorios()
-    elif escolha == "Sair":
-        if st.button("Confirmar saída"):
-            st.session_state.clear()
-            st.experimental_rerun()
-
-# ================== Tela de Resumo ==================
+# ================== Resumo ==================
 def tela_resumo():
     st.header("📊 Resumo de Vendas")
     visitante = is_visitante()
@@ -419,13 +392,34 @@ def tela_resumo():
         st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
         st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
 
+# ================== Menu Horizontal no Topo ==================
+def menu():
+    st.title("📌 Menu")
+    opcoes = ["Resumo", "Produtos", "Clientes", "Vendas", "Relatórios", "Sair"]
+    escolha = st.radio("Selecione a página:", opcoes, horizontal=True)
+
+    if escolha == "Resumo":
+        tela_resumo()
+    elif escolha == "Produtos":
+        tela_produtos()
+    elif escolha == "Clientes":
+        tela_clientes()
+    elif escolha == "Vendas":
+        tela_vendas()
+    elif escolha == "Relatórios":
+        tela_relatorios()
+    elif escolha == "Sair":
+        if st.button("Confirmar saída"):
+            st.session_state.clear()
+            st.rerun()
+
 # ================== Main ==================
 def main():
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
         login()
     else:
-        st.sidebar.write(f"👤 Usuário: {st.session_state['usuario']}")
+        st.write(f"👤 Usuário: {st.session_state['usuario']}")
         menu()
 
 if __name__ == "__main__":
-    main() 
+    main()
