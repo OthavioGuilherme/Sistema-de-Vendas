@@ -1,7 +1,8 @@
+# ================== Parte 1 ==================
 # ================== Configurações e Bibliotecas ==================
 import gspread
 from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
-import streamlit as st 
+import streamlit as st
 from datetime import datetime
 import os
 import io
@@ -140,7 +141,7 @@ def login():
                     st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
                     st.experimental_rerun()
 
-# ================== Tela Resumo ==================
+# ================== Resumo de Vendas ==================
 def tela_resumo():
     st.header("📊 Resumo de Vendas")
     visitante = is_visitante()
@@ -223,25 +224,30 @@ def tela_produtos():
         pdf_file = st.file_uploader("Selecione o PDF da nota fiscal", type=["pdf"])
         if pdf_file is not None and st.button("Substituir estoque pelo PDF"):
             substituir_estoque_pdf(pdf_file)
-# ================== Parte 3 ==================
+# ================== Parte 2 ==================
 # ================== Clientes ==================
 def tela_clientes():
     st.header("👥 Clientes")
     visitante = is_visitante()
-    acao = st.radio("Ação", ["Adicionar","Listar"], horizontal=True)
+    acao = st.radio("Ação", ["Adicionar", "Listar"], horizontal=True)
 
-    if acao=="Adicionar":
-        if visitante: st.info("🔒 Visitantes não podem adicionar clientes."); return
+    if acao == "Adicionar":
+        if visitante:
+            st.info("🔒 Visitantes não podem adicionar clientes.")
+            return
         nome = st.text_input("Nome do cliente")
         if st.button("Salvar cliente"):
-            if not nome.strip(): st.warning("Informe um nome válido.")
-            elif nome in st.session_state["clientes"]: st.warning("Cliente já existe.")
+            if not nome.strip():
+                st.warning("Informe um nome válido.")
+            elif nome in st.session_state["clientes"]:
+                st.warning("Cliente já existe.")
             else:
                 st.session_state["clientes"][nome] = []
                 save_db()
                 gsheets_adicionar_cliente(nome)
                 st.success(f"Cliente {nome} adicionado e salvo no Google Sheets!")
-    elif acao=="Listar":
+
+    elif acao == "Listar":
         st.subheader("Lista de Clientes")
         for cliente in sorted(st.session_state["clientes"].keys()):
             st.write(cliente)
@@ -252,7 +258,7 @@ def registrar_venda(cliente, codigo, quantidade):
     if codigo not in produtos:
         st.error("Produto não encontrado.")
         return
-    if produtos[codigo].get("quantidade",0) < quantidade:
+    if produtos[codigo].get("quantidade", 0) < quantidade:
         st.error("Estoque insuficiente.")
         return
     produtos[codigo]["quantidade"] -= quantidade
@@ -271,15 +277,18 @@ def registrar_venda(cliente, codigo, quantidade):
 def tela_vendas():
     st.header("🛒 Vendas")
     if not st.session_state["clientes"]:
-        st.warning("Cadastre um cliente primeiro."); return
+        st.warning("Cadastre um cliente primeiro.")
+        return
     if not st.session_state["produtos"]:
-        st.warning("Cadastre produtos primeiro."); return
+        st.warning("Cadastre produtos primeiro.")
+        return
 
     cliente = st.selectbox("Selecione o cliente", list(st.session_state["clientes"].keys()))
     
-    # ✅ Autocomplete de código de produto
+    # ✅ Autocomplete para código de produto
+    codigos_produtos = {str(k): v["nome"] for k, v in st.session_state["produtos"].items()}
     codigo_str = st.text_input("Digite o código do produto", "")
-    produtos_filtrados = {k:v["nome"] for k,v in st.session_state["produtos"].items() if str(k).startswith(codigo_str)}
+    produtos_filtrados = {k:v for k,v in codigos_produtos.items() if k.startswith(codigo_str)}
     if produtos_filtrados:
         st.write("Produtos encontrados:")
         for k,v in produtos_filtrados.items():
@@ -304,24 +313,29 @@ def tela_relatorios():
     visitante = is_visitante()
     for cliente, vendas in st.session_state["clientes"].items():
         if vendas:
-            total = sum(v["preco"]*v["quantidade"] for v in vendas)
+            total = sum(v["preco"] * v["quantidade"] for v in vendas)
             if visitante:
                 st.write(f"Cliente: {cliente} — Total: R$ *****")
             else:
                 st.write(f"Cliente: {cliente} — Total: R$ {total:.2f}")
 
-# ================== Menu no Topo ==================
+# ================== Menu ==================
 def menu():
     st.title("📌 Menu")
-    opcoes = ["Resumo","Produtos","Clientes","Vendas","Relatórios","Sair"]
+    opcoes = ["Resumo", "Produtos", "Clientes", "Vendas", "Relatórios", "Sair"]
     escolha = st.selectbox("Selecione a página:", opcoes, index=0)
 
-    if escolha=="Resumo": tela_resumo()
-    elif escolha=="Produtos": tela_produtos()
-    elif escolha=="Clientes": tela_clientes()
-    elif escolha=="Vendas": tela_vendas()
-    elif escolha=="Relatórios": tela_relatorios()
-    elif escolha=="Sair":
+    if escolha == "Resumo":
+        tela_resumo()
+    elif escolha == "Produtos":
+        tela_produtos()
+    elif escolha == "Clientes":
+        tela_clientes()
+    elif escolha == "Vendas":
+        tela_vendas()
+    elif escolha == "Relatórios":
+        tela_relatorios()
+    elif escolha == "Sair":
         if st.button("Confirmar saída"):
             st.session_state.clear()
             st.experimental_rerun()
@@ -331,8 +345,8 @@ def main():
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
         login()
     else:
-        st.write(f"👤 Usuário: {st.session_state['usuario']}")
+        st.sidebar.write(f"👤 Usuário: {st.session_state['usuario']}")
         menu()
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
