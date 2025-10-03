@@ -6,6 +6,7 @@ import gspread
 from datetime import datetime
 import json
 import io
+import os   
 
 # Configuração inicial
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
