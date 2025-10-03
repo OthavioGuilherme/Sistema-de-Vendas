@@ -116,12 +116,10 @@ def is_visitante():
 
 # ================== Login ==================
 # ================== Login seguro ==================
+# ================== Login seguro (substituir a função antiga) ==================
 def login():
     st.title("🔐 Login")
     escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
-
-    login_sucesso = False
-    usuario_digitado = None
 
     if escolha == "Usuário cadastrado":
         with st.form("form_login"):
@@ -131,8 +129,9 @@ def login():
                 usuario_lower = usuario.lower()
                 usuarios_normalizados = {k.lower(): v for k, v in USERS.items()}
                 if usuario_lower in usuarios_normalizados and usuarios_normalizados[usuario_lower] == senha:
-                    usuario_digitado = usuario  # mantém como digitado
-                    login_sucesso = True
+                    st.session_state["usuario"] = usuario  # mantém como digitado
+                    registrar_acesso(usuario)
+                    st.success(f"Bem-vindo(a), {usuario}!")
                 else:
                     st.error("Usuário ou senha incorretos.")
 
@@ -141,17 +140,11 @@ def login():
             nome = st.text_input("Digite seu nome").strip()
             if st.form_submit_button("Entrar como visitante"):
                 if nome:
-                    usuario_digitado = f"visitante-{nome}"
-                    login_sucesso = True
+                    st.session_state["usuario"] = f"visitante-{nome}"
+                    registrar_acesso(f"visitante-{nome}")
+                    st.success(f"Bem-vindo(a), visitante {nome}!")
                 else:
                     st.warning("Digite um nome válido.")
-
-    # Atualiza a sessão e faz rerun só depois do form
-    if login_sucesso and usuario_digitado:
-        st.session_state["usuario"] = usuario_digitado
-        registrar_acesso(usuario_digitado)
-        st.success(f"Bem-vindo(a), {usuario_digitado}!")
-        st.experimental_rerun()
 
 # ================== Resumo de Vendas ==================
 def tela_resumo():
