@@ -1,6 +1,5 @@
-# ================= PARTE 1 =================
 # CONFIGURAÇÕES DA PLANILHA
-PLANILHA_ID = "0a13b6def8abf73639c72473638e93d92ddaeec2"  # <-- ID da sua planilha Google
+PLANILHA_ID = "1ABCDefGhIjKlMnOPQRstuVWxyz1234567890"  # <-- Coloque aqui o ID correto da sua planilha
 ABA_VENDAS = "Vendas"
 ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"
@@ -17,7 +16,7 @@ import re
 
 try:
     import pdfplumber
-except Exception:
+except:
     pdfplumber = None
 
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
@@ -42,11 +41,9 @@ try:
     creds = service_account.Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
     gc = gspread.authorize(creds)
     GSHEETS_CONECTADO = True
-
 except KeyError:
     st.error("❌ ERRO DE CONFIGURAÇÃO: Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
     st.info("Rodando sem conexão com o Google Sheets.")
-
 except Exception as e:
     st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
 
@@ -74,9 +71,9 @@ def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: flo
     if not GSHEETS_CONECTADO:
         return
     try:
-        data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         planilha = gc.open_by_key(PLANILHA_ID)
         aba = planilha.worksheet(ABA_VENDAS)
+        data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         nova_linha = [
             data_registro,
             cliente,
@@ -139,21 +136,23 @@ def sincronizar_tudo_gsheets():
     if not GSHEETS_CONECTADO:
         st.warning("❌ Google Sheets não conectado. Nenhum dado será enviado.")
         return
-    
+
+    st.info("⏳ Sincronizando dados para Google Sheets...")
+
     # Clientes
     for cliente in st.session_state["clientes"].keys():
         try:
             gsheets_adicionar_cliente(cliente)
         except:
             pass
-    
+
     # Produtos
     for cod, dados in st.session_state["produtos"].items():
         try:
             gsheets_append_produto(cod, dados["nome"], dados["preco"], dados.get("quantidade", 0))
         except:
             pass
-    
+
     # Vendas
     for cliente, vendas in st.session_state["clientes"].items():
         for v in vendas:
@@ -161,7 +160,7 @@ def sincronizar_tudo_gsheets():
                 gsheets_append_venda(cliente, v["nome"], v["quantidade"], v["preco"])
             except:
                 pass
-    
+
     st.success("✅ Todos os dados existentes foram enviados para o Google Sheets!")
 # ================= PARTE 2 =================
 # ================== Login ==================
@@ -173,7 +172,7 @@ def login():
         usuario_input = st.text_input("Usuário")
         senha = st.text_input("Senha", type="password")
         if st.button("Entrar"):
-            usuario = usuario_input.lower().strip()  # aceita maiúscula/minúscula
+            usuario = usuario_input.lower().strip()
             if usuario in USERS and USERS[usuario] == senha:
                 st.session_state["usuario"] = usuario
                 registrar_acesso(f"login-usuario:{usuario}")
@@ -197,6 +196,7 @@ def login():
                 registrar_acesso(f"login-visitante:{nome.strip()}")
                 st.success(f"Bem-vindo(a), visitante {nome.strip()}!")
                 st.rerun()
+
 
 # ================== Produtos ==================
 def adicionar_produto_manual(cod, nome, preco, qtd=10):
@@ -270,7 +270,7 @@ def tela_produtos():
     elif acao == "Listar/Buscar":
         termo = st.text_input("Buscar por nome ou código").lower()
         st.subheader("Lista de Produtos")
-        for cod, dados in sorted(st.session_state["produtos"].items(), key=lambda x: str(x)):
+        for cod, dados in sorted(st.session_state["produtos"].items(), key=lambda x: str(x[0])):
             if termo in str(cod) or termo in dados["nome"].lower() or termo == "":
                 st.write(f"{cod} - {dados['nome']} (R$ {dados['preco']:.2f}) | Estoque: {dados.get('quantidade', 0)}")
 
@@ -282,6 +282,7 @@ def tela_produtos():
         if pdf_file is not None:
             if st.button("Substituir estoque pelo PDF"):
                 substituir_estoque_pdf(pdf_file)
+
 
 # ================== Clientes ==================
 def tela_clientes():
