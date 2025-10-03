@@ -1,84 +1,57 @@
 # ================= PARTE 1 =================
-# =================================================================
-# CONFIGURAÇÕES (AJUSTE NOME DA PLANILHA)
-# =================================================================
-PLANILHA_NOME = "Sistema de vendas"
-ABA_VENDAS = "Vendas"
-ABA_CLIENTES = "Clientes"
-ABA_PRODUTOS = "Produtos"
-
-# =================================================================
-# BIBLIOTECAS
-# =================================================================
+# ================= PARTE 1 - CONEXÃO COM GOOGLE SHEETS E CONFIGURAÇÕES =================
 import streamlit as st
+import pandas as pd
 import gspread
-from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
-import json
 from datetime import datetime
-import os
+import json
 import io
-import re
 
-# PDF opcional
-try:
-    import pdfplumber
-except Exception:
-    pdfplumber = None
-
+# Configuração inicial
 st.set_page_config(page_title="Sistema de Vendas", page_icon="🧾", layout="wide")
 
-# ================== Usuários (login) ==================
-USERS = {"othavio": "122008", "isabela": "122008"}
-LOG_FILE = "acessos.log"
-DB_FILE = "db.json"
+# URL da sua planilha Google
+SHEET_URL = "COLE_AQUI_A_URL_DA_SUA_PLANILHA"
 
-# ================== Conexão com Google Sheets ==================
-GSHEETS_CONECTADO = False
-gc = None
-
+# Função para conectar no Google Sheets
 def connect_gsheet():
-    global gc, GSHEETS_CONECTADO
     try:
-        json_string = st.secrets.get("GCP_SA_CREDENTIALS")
-        credentials_dict = json.loads(json_string)
-        gc = gspread.service_account_from_dict(credentials_dict)
-        GSHEETS_CONECTADO = True
+        # Pega direto do secrets (já vem em formato dict)
+        creds = dict(st.secrets["GCP_SA_CREDENTIALS"])
+        gc = gspread.service_account_from_dict(creds)
+        sh = gc.open_by_url(SHEET_URL)
+        return sh
     except Exception as e:
-        GSHEETS_CONECTADO = False
         st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
-        st.info("Verifique se o JSON está colado corretamente e se a Conta de Serviço tem permissão de Editor na planilha.")
+        return None
 
-connect_gsheet()
+# Inicializa conexão
+def init_db():
+    sh = connect_gsheet()
+    if not sh:
+        return None, None, None
 
-# ================== Registro de acesso ==================
-def registrar_acesso(usuario: str):
     try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat()} - {usuario}\n")
+        ws_users = sh.worksheet("USUÁRIOS")
     except:
-        pass
+        ws_users = sh.add_worksheet(title="USUÁRIOS", rows=100, cols=20)
+        ws_users.append_row(["usuario", "senha"])
 
-# ================== Funções Google Sheets ==================
-def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: float):
-    if not GSHEETS_CONECTADO:
-        return
-    global gc
     try:
-        data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        planilha = gc.open(PLANILHA_NOME)
-        aba = planilha.worksheet(ABA_VENDAS)
-        nova_linha = [
-            data_registro,
-            cliente,
-            produto,
-            quantidade,
-            f"{preco:.2f}".replace('.', ','),
-            f"{(preco * quantidade):.2f}".replace('.', ',')
-        ]
-        aba.append_row(nova_linha, value_input_option='USER_ENTERED')
-        st.toast("✅ Venda salva no Google Sheets!", icon='sheets')
-    except Exception as e:
-        st.warning(f"Falha ao salvar a venda no Google Sheets: {e}")
+        ws_produtos = sh.worksheet("PRODUTOS")
+    except:
+        ws_produtos = sh.add_worksheet(title="PRODUTOS", rows=1000, cols=20)
+        ws_produtos.append_row(["codigo", "descricao", "preco"])
+
+    try:
+        ws_vendas = sh.worksheet("VENDAS")
+    except:
+        ws_vendas = sh.add_worksheet(title="VENDAS", rows=1000, cols=20)
+        ws_vendas.append_row(["data", "cliente", "codigo", "descricao", "quantidade", "preco", "total"])
+
+    return ws_users, ws_produtos, ws_vendas
+
+# ================= FIM DA PARTE 1 =================
 # ================= PARTE 2 =================
 def gsheets_delete_venda(cliente: str, produto: str, valor: float):
     if GSHEETS_CONECTADO:
