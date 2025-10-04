@@ -1,12 +1,13 @@
+# ================= PARTE 1 =================
 # CONFIGURAÇÕES DA PLANILHA
-PLANILHA_ID = "1ABCDefGhIjKlMnOPQRstuVWxyz1234567890"  # <-- Coloque aqui o ID correto da sua planilha
+PLANILHA_ID = "1ABCDefGhIjKlMnOPQRstuVWxyz1234567890"  # <-- Coloque o ID correto da planilha
 ABA_VENDAS = "Vendas"
 ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"
 
 # BIBLIOTECAS
 import gspread
-from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound
+from gspread.exceptions import WorksheetNotFound, SpreadsheetNotFound, APIError
 import json
 import streamlit as st
 from datetime import datetime
@@ -40,10 +41,14 @@ try:
     ]
     creds = service_account.Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    GSHEETS_CONECTADO = True
+    # Testa se a planilha existe e acessível
+    try:
+        gc.open_by_key(PLANILHA_ID)
+        GSHEETS_CONECTADO = True
+    except Exception:
+        GSHEETS_CONECTADO = False
 except KeyError:
     st.error("❌ ERRO DE CONFIGURAÇÃO: Streamlit não encontrou a chave 'GCP_SA_CREDENTIALS' nos Secrets.")
-    st.info("Rodando sem conexão com o Google Sheets.")
 except Exception as e:
     st.error(f"❌ ERRO FATAL AO CONECTAR: {type(e).__name__} - {e}")
 
@@ -64,6 +69,8 @@ def gsheets_append_produto(cod: int, nome: str, preco: float, quantidade: int):
         aba = planilha.worksheet(ABA_PRODUTOS)
         nova_linha = [cod, nome, f"{preco:.2f}".replace('.',','), quantidade]
         aba.append_row(nova_linha, value_input_option='USER_ENTERED')
+    except APIError as e:
+        st.warning(f"Erro API Google Sheets: {e}")
     except Exception as e:
         st.warning(f"Falha ao salvar produto no Google Sheets: {e}")
 
@@ -83,6 +90,8 @@ def gsheets_append_venda(cliente: str, produto: str, quantidade: int, preco: flo
             f"{(preco * quantidade):.2f}".replace('.',',')
         ]
         aba.append_row(nova_linha, value_input_option='USER_ENTERED')
+    except APIError as e:
+        st.warning(f"Erro API Google Sheets: {e}")
     except Exception as e:
         st.warning(f"Falha ao salvar venda no Google Sheets: {e}")
 
@@ -93,6 +102,8 @@ def gsheets_adicionar_cliente(nome: str):
         planilha = gc.open_by_key(PLANILHA_ID)
         aba = planilha.worksheet(ABA_CLIENTES)
         aba.append_row([nome], value_input_option='USER_ENTERED')
+    except APIError as e:
+        st.warning(f"Erro API Google Sheets: {e}")
     except Exception as e:
         st.warning(f"Falha ao salvar cliente no Google Sheets: {e}")
 
@@ -120,6 +131,7 @@ def load_db():
     default_clients = {"Tabata": [], "Valquiria": [], "Vanessa": [], "Pamela": [], "Elan": [], "Claudinha": []}
     return {}, default_clients
 
+# ================== Inicialização do session_state ==================
 if "usuario" not in st.session_state:
     st.session_state["usuario"] = None
 if "produtos" not in st.session_state:
@@ -162,27 +174,29 @@ def sincronizar_tudo_gsheets():
                 pass
 
     st.success("✅ Todos os dados existentes foram enviados para o Google Sheets!")
-# ================= PARTE 2 =================
+    
+    # ================= PARTE 2 =================
 # ================== Login ==================
 def login():
     st.title("🔐 Login")
     escolha = st.radio("Como deseja entrar?", ["Usuário cadastrado", "Visitante"], horizontal=True)
 
+    status_conn = "✅ Conectado" if GSHEETS_CONECTADO else "❌ Desconectado"
+    st.info(f"Status Google Sheets: {status_conn}")
+
     if escolha == "Usuário cadastrado":
         usuario_input = st.text_input("Usuário")
         senha = st.text_input("Senha", type="password")
-        if st.button("Entrar"):
+        if st.button("Entrar como usuário"):
             usuario = usuario_input.lower().strip()
             if usuario in USERS and USERS[usuario] == senha:
                 st.session_state["usuario"] = usuario
                 registrar_acesso(f"login-usuario:{usuario}")
                 st.success(f"Bem-vindo(a), {usuario_input}!")
 
-                # Notificação de Google Sheets conectado
-                if GSHEETS_CONECTADO:
-                    st.info("Google Sheets conectado ✅")
-                    if st.button("Sincronizar todos os dados existentes"):
-                        sincronizar_tudo_gsheets()
+                # Botão de sincronização sempre visível após login
+                if st.button("Sincronizar todos os dados existentes para Google Sheets"):
+                    sincronizar_tudo_gsheets()
 
                 st.rerun()
             else:
@@ -309,6 +323,7 @@ def tela_clientes():
         st.subheader("Lista de Clientes")
         for cliente in sorted(st.session_state["clientes"].keys()):
             st.write(cliente)
+            
 # ================= PARTE 3 =================
 # ================== Vendas ==================
 def registrar_venda(cliente, codigo, quantidade):
@@ -319,7 +334,10 @@ def registrar_venda(cliente, codigo, quantidade):
     if produtos[codigo].get("quantidade", 0) < quantidade:
         st.error("Estoque insuficiente.")
         return
+
+    # Atualiza estoque
     produtos[codigo]["quantidade"] -= quantidade
+
     venda = {
         "codigo": codigo,
         "nome": produtos[codigo]["nome"],
@@ -327,10 +345,12 @@ def registrar_venda(cliente, codigo, quantidade):
         "quantidade": quantidade,
         "data": datetime.now().strftime("%d/%m/%Y %H:%M")
     }
+
     st.session_state["clientes"][cliente].append(venda)
     save_db()
     gsheets_append_venda(cliente, produtos[codigo]["nome"], quantidade, produtos[codigo]["preco"])
     st.success("Venda registrada e salva no Google Sheets!")
+
 
 def tela_vendas():
     st.header("🛒 Vendas")
@@ -365,6 +385,7 @@ def tela_vendas():
             for v in vendas:
                 st.write(f"- {v['data']} | {v['nome']} (x{v['quantidade']}) - R$ {v['preco']:.2f}")
 
+
 # ================== Relatórios ==================
 def tela_relatorios():
     st.header("📑 Relatórios")
@@ -377,14 +398,16 @@ def tela_relatorios():
             else:
                 st.write(f"Cliente: {cliente} — Total: R$ {total:.2f}")
 
+
 # ================== Resumo ==================
 def tela_resumo():
     st.header("📊 Resumo de Vendas")
     visitante = is_visitante()
     total_geral = 0.0
     for cliente, vendas in st.session_state["clientes"].items():
-        total_cliente = sum((v.get("preco", 0.0) * v.get("quantidade", 0)) for v in vendas)
+        total_cliente = sum(v.get("preco", 0.0) * v.get("quantidade", 0) for v in vendas)
         total_geral += total_cliente
+
     comissao = total_geral * 0.25
     if visitante:
         st.metric("💰 Total Geral de Vendas", "R$ *****")
@@ -392,6 +415,7 @@ def tela_resumo():
     else:
         st.metric("💰 Total Geral de Vendas", f"R$ {total_geral:.2f}")
         st.metric("🧾 Comissão (25%)", f"R$ {comissao:.2f}")
+
 
 # ================== Menu Horizontal no Topo ==================
 def menu():
@@ -414,6 +438,7 @@ def menu():
             st.session_state.clear()
             st.rerun()
 
+
 # ================== Main ==================
 def main():
     if "usuario" not in st.session_state or st.session_state["usuario"] is None:
@@ -421,6 +446,7 @@ def main():
     else:
         st.write(f"👤 Usuário: {st.session_state['usuario']}")
         menu()
+
 
 if __name__ == "__main__":
     main()
