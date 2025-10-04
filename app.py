@@ -1,6 +1,6 @@
 # ================= PARTE 1 =================
 # CONFIGURAÇÕES DA PLANILHA
-PLANILHA_ID = "1ABCDefGhIjKlMnOPQRstuVWxyz1234567890"  # <-- Coloque o ID correto da planilha
+PLANILHA_ID = "1-HBfc9So-Rx1HgbuTHpALXFz8NbhL7Z28zyN-zCkTAg"
 ABA_VENDAS = "Vendas"
 ABA_CLIENTES = "Clientes"
 ABA_PRODUTOS = "Produtos"
